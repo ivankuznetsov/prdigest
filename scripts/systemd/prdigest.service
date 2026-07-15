@@ -1,0 +1,21 @@
+[Unit]
+Description=prdigest multi-repo merged-PR digests
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prdigest
+Group=prdigest
+EnvironmentFile=-/etc/prdigest/.env
+ExecStart=/usr/local/bin/prdigest serve --config /etc/prdigest/config.yml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prdigest
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

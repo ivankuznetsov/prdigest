@@ -1,0 +1,11 @@
+/bin/
+/dist/
+*.exe
+.env
+.env.*
+!.env.example
+config.local.yml
+*.log
+.DS_Store
+coverage.out
+vendor/
