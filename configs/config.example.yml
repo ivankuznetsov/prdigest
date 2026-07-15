@@ -1,38 +1,29 @@
 # prdigest — multi-repo merged-PR daily digest (Hive-independent)
 
 timezone: Europe/London
-# Local day that just ended is digested by default (same idea as Hive).
 schedule:
-  # cron in the configured timezone; 09:05 = after the day ends + catch-up window
+  # Prefer systemd timer + `prdigest run` for v1.
+  # serve mode may honor this later.
   cron: "5 9 * * *"
-  # max days to catch up after downtime (0 = unlimited)
   max_catchup_days: 7
 
 github:
-  # token from env GITHUB_TOKEN (preferred) or set token_env
   token_env: GITHUB_TOKEN
-  # owner/name repos to scan; empty = error (no silent zero-repo digest)
+  # explicit owner/name only — empty list is a hard error
   repos:
     - owner/repo-one
     - owner/repo-two
 
 telegram:
   token_env: TELEGRAM_BOT_TOKEN
-  # only these chat IDs may receive digests
   chat_id_allowlist:
     - -1001234567890
-  # primary delivery target (must be in allowlist)
   chat_id: -1001234567890
-  # parse_mode for messages
-  parse_mode: HTML
 
 digest:
-  # include Lines +X/-Y and commit counts via GitHub PR stats (best-effort)
   line_stats: true
-  # still send on days with zero merges
   send_empty: true
   empty_message: "Merged PR digest — {date}\nTotal: 0 PRs"
 
 state:
-  # where last_digested_date is stored
   path: /var/lib/prdigest/state.json

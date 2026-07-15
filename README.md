@@ -2,40 +2,37 @@
 
 Standalone **daily merged-PR digests** for any GitHub repos you list.
 
-Put it on a VPS, give it a GitHub token + Telegram bot + allowlisted chats, and it will send a digest like Hive’s merged-PR report — **without installing Hive**.
+Ruby CLI gem. Put it on a VPS with:
 
-## What you get
+1. repo list  
+2. GitHub token  
+3. Telegram bot + allowlisted chats  
 
-- Multi-repo scan (`owner/name` list in config)
-- One message per local day (timezone-aware)
-- Grouped by repo: PR title, link, author
-- Optional day line stats: `Lines +X/-Y · PRs N · Commits M` (best-effort GitHub stats)
-- Telegram delivery with **chat allowlist** (refuse send outside allowlist)
-- Daemon/cron mode with catch-up after downtime
-- Open source, single binary, no Hive dependency
+…and it sends digests like Hive’s merged-PR report **without installing Hive**.
 
-## Non-goals (v1)
+## Stack
 
-- Not a Hive task / shipped-task digest
-- Not a full agent workflow engine
-- No auto-discovery of “all your GitHub orgs” (explicit repo list only)
+- **Ruby 3.2+**
+- **Thor** CLI
+- **Octokit** for GitHub (no local `gh` required on the VPS)
+- plain Telegram Bot API `sendMessage`
+- YAML config + env secrets
+- **v1 schedule:** systemd timer + `prdigest run` (boring, reliable)
+- optional later: long-running `serve`
 
-## Quick start
+## Install (dev)
 
 ```bash
-go build -o bin/prdigest ./cmd/prdigest
-
-cp configs/config.example.yml /etc/prdigest/config.yml
-cp .env.example /etc/prdigest/.env
-# edit repos, chat_id, allowlist; put tokens in env
-
-set -a; source /etc/prdigest/.env; set +a
-./bin/prdigest run --config /etc/prdigest/config.yml
-./bin/prdigest run --date 2026-07-14 --dry-run
-./bin/prdigest serve --config /etc/prdigest/config.yml
+git clone https://github.com/ivankuznetsov/prdigest
+cd prdigest
+bundle install
+bundle exec prdigest version
+bundle exec prdigest run --dry-run --config configs/config.example.yml
 ```
 
-## Config sketch
+## Config
+
+See `configs/config.example.yml`.
 
 ```yaml
 timezone: Europe/London
@@ -51,30 +48,44 @@ digest:
   send_empty: true
 ```
 
-Tokens stay in env (`GITHUB_TOKEN`, `TELEGRAM_BOT_TOKEN`), not in the yaml.
+Tokens in env only: `GITHUB_TOKEN`, `TELEGRAM_BOT_TOKEN`.
 
-## Why this exists
+## Commands
 
-Hive’s `hive digest --source merged-prs` is great when you already run Hive. Many teams want the **same report** on a cheap VPS with only:
+```bash
+prdigest run [--config PATH] [--date YYYY-MM-DD] [--dry-run] [--json]
+prdigest serve   # deferred; use systemd timer for v1
+prdigest version
+```
 
-1. repo list
-2. GitHub key
-3. Telegram bot + allowed chats
+## VPS sketch
 
-`prdigest` is that extract: portable, boring, open source.
+```bash
+# install ruby + gem or clone + bundle
+cp configs/config.example.yml /etc/prdigest/config.yml
+cp .env.example /etc/prdigest/.env
+# edit repos + chats; put tokens in .env
+
+# oneshot + timer
+cp scripts/systemd/prdigest.service /etc/systemd/system/
+cp scripts/systemd/prdigest.timer /etc/systemd/system/
+systemctl enable --now prdigest.timer
+```
+
+## Non-goals (v1)
+
+- No Hive dependency / registered projects
+- No shipped-task narration
+- No org-wide auto-discovery (explicit repo list only)
 
 ## Relationship to Hive
 
-| | Hive digest | prdigest |
-|---|---|---|
-| Depends on Hive projects / worktrees | yes | no |
-| Repo list | Hive registry or `--repo` | config file only |
-| Shipped-task narration | opt-in | out of scope |
-| Deploy | with Hive daemon | any VPS / systemd / Docker |
+Hive keeps an integrated digest for Hive users.  
+`prdigest` is the portable multi-repo extract for any GitHub repos on a VPS.
 
 ## Status
 
-Scaffold landed. Implementation planned via architecture workflow; coding follows.
+Ruby scaffold + config validation. GitHub fetch / Telegram send / line stats next.
 
 ## License
 

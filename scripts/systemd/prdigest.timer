@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily prdigest merged-PR digest
+
+[Timer]
+OnCalendar=*-*-* 09:05:00
+Persistent=true
+Unit=prdigest.service
+
+[Install]
+WantedBy=timers.target
