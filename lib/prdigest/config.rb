@@ -2,6 +2,7 @@
 
 require "yaml"
 require "pathname"
+require "tzinfo"
 
 module Prdigest
   class Config
@@ -15,6 +16,10 @@ module Prdigest
       raise ConfigError, "config root must be a mapping" unless raw.is_a?(Hash)
 
       new(raw, path: path).tap(&:validate!)
+    rescue ConfigError
+      raise
+    rescue StandardError => e
+      raise ConfigError, "cannot load config: #{e.class}"
     end
 
     def initialize(raw, path: nil)
@@ -41,11 +46,15 @@ module Prdigest
     end
 
     def chat_id
-      raw.dig("telegram", "chat_id")
+      Integer(raw.dig("telegram", "chat_id"))
+    rescue TypeError, ArgumentError
+      nil
     end
 
     def chat_id_allowlist
       Array(raw.dig("telegram", "chat_id_allowlist")).map { |id| Integer(id) }
+    rescue TypeError, ArgumentError
+      []
     end
 
     def line_stats?
@@ -54,6 +63,10 @@ module Prdigest
 
     def send_empty?
       raw.dig("digest", "send_empty") != false
+    end
+
+    def empty_message
+      raw.dig("digest", "empty_message") || "Merged PR digest — {date}\nTotal: 0 PRs"
     end
 
     def state_path
@@ -66,9 +79,19 @@ module Prdigest
 
     def max_catchup_days
       Integer(raw.dig("schedule", "max_catchup_days") || 7)
+    rescue TypeError, ArgumentError
+      raise ConfigError, "schedule.max_catchup_days must be an integer from 1 to 30"
     end
 
     def validate!
+      begin
+        TZInfo::Timezone.get(timezone)
+      rescue TZInfo::InvalidTimezoneIdentifier
+        raise ConfigError, "timezone must be a resolvable IANA identifier"
+      end
+      unless (1..30).cover?(max_catchup_days)
+        raise ConfigError, "schedule.max_catchup_days must be from 1 to 30"
+      end
       raise ConfigError, "github.repos must list at least one owner/name" if repos.empty?
       repos.each do |repo|
         next if repo.match?(%r{\A[^/\s]+/[^/\s]+\z})
@@ -77,7 +100,7 @@ module Prdigest
       end
       raise ConfigError, "telegram.chat_id is required" if chat_id.nil?
       raise ConfigError, "telegram.chat_id_allowlist must not be empty" if chat_id_allowlist.empty?
-      unless chat_id_allowlist.include?(Integer(chat_id))
+      unless chat_id_allowlist.include?(chat_id)
         raise ConfigError, "telegram.chat_id must be present in chat_id_allowlist"
       end
       self
