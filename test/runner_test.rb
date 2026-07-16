@@ -105,6 +105,20 @@ class RunnerTest < Minitest::Test
     assert_equal true, state.writes.first[:last_skip][:notice_pending]
   end
 
+  def test_skip_checkpoint_failure_preserves_all_requested_days_as_remaining
+    state = FakeState.new(
+      Prdigest::State::Record.new(date(0), nil),
+      write_error: Prdigest::StateError.new("safe")
+    )
+
+    result = runner(state: state, github: FakeGitHub.new, max_catchup_days: 7).call
+
+    assert_equal "failure", result.status
+    assert_equal (date(4)..date(10)).to_a, result.requested_days
+    assert_equal result.requested_days, result.remaining_days
+    assert_nil result.failed_date
+  end
+
   def test_recovered_skip_notice_is_cleared_after_next_settlement
     audit = { start_date: date(1), end_date: date(3), notice_pending: true }
     state = FakeState.new(Prdigest::State::Record.new(date(3), audit))
@@ -156,16 +170,30 @@ class RunnerTest < Minitest::Test
     assert_equal [date(10)], result.settled_days
   end
 
+  def test_inspection_does_not_expose_retained_environment_tokens
+    github_token = "synthetic-github-secret"
+    telegram_token = "synthetic-telegram-secret"
+    instance = runner(
+      github: FakeGitHub.new,
+      env: { "GITHUB_TOKEN" => github_token, "TELEGRAM_BOT_TOKEN" => telegram_token }
+    )
+
+    [instance.inspect, instance.to_s].each do |surface|
+      refute_includes surface, github_token
+      refute_includes surface, telegram_token
+    end
+  end
+
   private
 
   def runner(state: nil, github:, telegram: FakeTelegram.new, renderer: FakeRenderer.new,
              date: nil, dry_run: false, max_catchup_days: 7,
-             state_factory: nil, telegram_factory: nil)
+             state_factory: nil, telegram_factory: nil, env: {})
     config = Struct.new(:timezone, :repos, :line_stats?, :max_catchup_days).new("UTC", ["o/r"], false, max_catchup_days)
     Prdigest::Runner.new(
       config: config, date: date, dry_run: dry_run, clock: FakeClock.new(self.date(10)),
       state_factory: state_factory || -> { state || FakeState.new(Prdigest::State::Record.new(nil, nil)) },
-      github: github, renderer: renderer, telegram_factory: telegram_factory || -> { telegram }
+      github: github, renderer: renderer, telegram_factory: telegram_factory || -> { telegram }, env: env
     )
   end
 

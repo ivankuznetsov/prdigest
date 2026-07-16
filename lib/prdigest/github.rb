@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "octokit"
+require "set"
 require "time"
 
 module Prdigest
@@ -8,13 +9,11 @@ module Prdigest
     SEARCH_CAP = 1_000
     MAX_ATTEMPTS = 3
 
-    def initialize(token:, client: nil, sleeper: ->(seconds) { sleep(seconds) })
+    def initialize(token:, client: nil, sleeper: ->(seconds) { sleep(seconds) }, now: -> { Time.now.to_i })
       @token = token.to_s
-      @client = client || Octokit::Client.new(
-        access_token: @token,
-        connection_options: { request: { open_timeout: 10, timeout: 30, write_timeout: 30 } }
-      )
+      @client = client || default_client
       @sleeper = sleeper
+      @now = now
     end
 
     def fetch(date:, window:, repositories:, line_stats: false)
@@ -24,7 +23,27 @@ module Prdigest
       DayDigest.build(date: date, repository_order: repositories, pulls: pulls, line_stats: line_stats)
     end
 
+    def inspect
+      "#<#{self.class} token=[REDACTED]>"
+    end
+
+    alias to_s inspect
+
     private
+
+    def default_client
+      middleware = Octokit::Default::MIDDLEWARE.dup
+      middleware.handlers.reject! { |handler| retry_middleware?(handler.klass) }
+      Octokit::Client.new(
+        access_token: @token,
+        middleware: middleware,
+        connection_options: { request: { open_timeout: 10, timeout: 30, write_timeout: 30 } }
+      )
+    end
+
+    def retry_middleware?(middleware)
+      %w[Faraday::Request::Retry Faraday::Retry::Middleware].include?(middleware.name)
+    end
 
     def fetch_repository(repository, date, window, line_stats)
       return [] if window.zero_length?
@@ -32,6 +51,7 @@ module Prdigest
       query = build_query(repository, window)
       page = 1
       items = []
+      seen_numbers = Set.new
       total = nil
       loop do
         response = request(repository, date) { @client.search_issues(query, per_page: 100, page: page) }
@@ -43,8 +63,13 @@ module Prdigest
         fail_fetch!(repository, date, "search total changed during pagination") unless total == response_total
 
         page_items = Array(field(response, :items))
+        page_items.each do |item|
+          number = Integer(field(item, :number))
+          fail_fetch!(repository, date, "pagination repeated a pull request") unless seen_numbers.add?(number)
+        end
         items.concat(page_items)
-        break if items.length >= total
+        fail_fetch!(repository, date, "pagination exceeded total") if items.length > total
+        break if items.length == total
         fail_fetch!(repository, date, "pagination stopped before total") if page_items.empty?
         page += 1
       end
@@ -136,17 +161,31 @@ module Prdigest
 
     def transient?(error)
       error.is_a?(Octokit::ServerError) ||
-        (defined?(Octokit::TooManyRequests) && error.is_a?(Octokit::TooManyRequests)) ||
+        rate_limited?(error) ||
         (defined?(Faraday::ConnectionFailed) && error.is_a?(Faraday::ConnectionFailed)) ||
         (defined?(Faraday::TimeoutError) && error.is_a?(Faraday::TimeoutError))
     end
 
+    def rate_limited?(error)
+      error.is_a?(Octokit::TooManyRequests) ||
+        (error.respond_to?(:response_status) && Integer(error.response_status, exception: false) == 429)
+    end
+
     def retry_delay(error)
       headers = error.respond_to?(:response_headers) ? error.response_headers : nil
-      value = headers && (headers["retry-after"] || headers["Retry-After"])
-      Integer(value, exception: false)
+      retry_after = Integer(response_header(headers, "retry-after"), exception: false)
+      return retry_after if retry_after
+
+      reset_at = Integer(response_header(headers, "x-ratelimit-reset"), exception: false)
+      [reset_at - Integer(@now.call), 0].max if reset_at
     rescue StandardError
       nil
+    end
+
+    def response_header(headers, name)
+      return unless headers
+
+      Faraday::Utils::Headers.from(headers)[name]
     end
 
     def error_kind(error)

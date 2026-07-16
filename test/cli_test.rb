@@ -6,6 +6,17 @@ require "tmpdir"
 require "yaml"
 
 class CliTest < Minitest::Test
+  def test_exposes_thor_tasks_and_help_switches
+    %w[run_cmd serve version].each { |command| assert_includes Prdigest::CLI.tasks.keys, command }
+    assert_equal :run_cmd, Prdigest::CLI.send(:map).fetch("run")
+
+    [["help"], ["--help"], ["-h"]].each do |argv|
+      out = StringIO.new
+      assert_equal 0, Prdigest::CLI.invoke(argv, out: out, err: StringIO.new)
+      assert_match(/Usage: prdigest run/, out.string)
+    end
+  end
+
   def test_config_discovery_precedence
     Dir.mktmpdir do |dir|
       explicit = File.join(dir, "explicit.yml")
@@ -61,6 +72,38 @@ class CliTest < Minitest::Test
       assert_equal 2, Prdigest::CLI.invoke(argv, out: out, err: StringIO.new, env: env)
       assert_equal "config", JSON.parse(out.string).dig("error", "kind")
     end
+  end
+
+  def test_human_failure_reports_progress_and_error
+    path = write_config
+    result = Prdigest::Result.failure(
+      mode: "scheduled",
+      error_kind: "github",
+      message: "synthetic failure",
+      requested_days: [Date.new(2026, 1, 1), Date.new(2026, 1, 2), Date.new(2026, 1, 3)],
+      settled_days: [Date.new(2026, 1, 1)],
+      skipped_days: [Date.new(2025, 12, 31)],
+      failed_date: Date.new(2026, 1, 2),
+      remaining_days: [Date.new(2026, 1, 2), Date.new(2026, 1, 3)]
+    )
+    factory = ->(**) { Struct.new(:result) { def call = result }.new(result) }
+    out = StringIO.new
+    err = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      ["run", "--config", path],
+      out: out,
+      err: err,
+      env: { "GITHUB_TOKEN" => "synthetic", "TELEGRAM_BOT_TOKEN" => "synthetic" },
+      runner_factory: factory
+    )
+
+    assert_equal 6, code
+    assert_empty out.string
+    assert_includes err.string, "settled=2026-01-01"
+    assert_includes err.string, "skipped=2025-12-31"
+    assert_includes err.string, "remaining=2026-01-02,2026-01-03"
+    assert_includes err.string, "github: synthetic failure"
   end
 
   private

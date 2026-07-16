@@ -43,6 +43,21 @@ class GithubTest < Minitest::Test
     assert_empty client.details
   end
 
+  def test_rejects_repeated_items_during_pagination
+    first = Response.new(total_count: 2, incomplete_results: false, items: [item(1)])
+    second = Response.new(total_count: 2, incomplete_results: false, items: [item(1)])
+    client = FakeClient.new(search_responses: [first, second])
+
+    error = assert_raises(Prdigest::FetchError) do
+      github(client).fetch(
+        date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+      )
+    end
+
+    assert_match(/pagination repeated a pull request/, error.message)
+    assert_equal 2, client.searches.length
+  end
+
   def test_accepts_false_and_zero_fields_from_json_hashes
     response = JSON.parse('{"total_count":0,"incomplete_results":false,"items":[]}')
     digest = github(FakeClient.new(search_responses: [response])).fetch(
@@ -102,10 +117,79 @@ class GithubTest < Minitest::Test
     assert_equal 3, client.searches.length
   end
 
+  def test_default_octokit_transport_is_bounded_to_three_http_attempts
+    request = stub_request(:get, %r{\Ahttps://api\.github\.com/search/issues\?}).to_return(
+      status: 500,
+      headers: { "Content-Type" => "application/json" },
+      body: JSON.generate(message: "synthetic server failure")
+    )
+
+    assert_raises(Prdigest::FetchError) do
+      github.fetch(
+        date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+      )
+    end
+
+    assert_requested request, times: 3
+  end
+
+  def test_retries_real_429_responses_using_retry_after
+    sleeps = []
+    stub_request(:get, %r{\Ahttps://api\.github\.com/search/issues\?}).to_return(
+      {
+        status: 429,
+        headers: { "Content-Type" => "application/json", "Retry-After" => "2" },
+        body: JSON.generate(message: "synthetic rate limit")
+      },
+      {
+        status: 200,
+        headers: { "Content-Type" => "application/json" },
+        body: JSON.generate(total_count: 0, incomplete_results: false, items: [])
+      }
+    )
+
+    digest = github(sleeper: ->(seconds) { sleeps << seconds }).fetch(
+      date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+    )
+
+    assert_equal 0, digest.total_prs
+    assert_equal [2], sleeps
+  end
+
+  def test_uses_rate_limit_reset_when_retry_after_is_absent
+    sleeps = []
+    stub_request(:get, %r{\Ahttps://api\.github\.com/search/issues\?}).to_return(
+      {
+        status: 429,
+        headers: { "Content-Type" => "application/json", "X-RateLimit-Reset" => "1045" },
+        body: JSON.generate(message: "synthetic rate limit")
+      },
+      {
+        status: 200,
+        headers: { "Content-Type" => "application/json" },
+        body: JSON.generate(total_count: 0, incomplete_results: false, items: [])
+      }
+    )
+
+    digest = github(sleeper: ->(seconds) { sleeps << seconds }, now: -> { 1_000 }).fetch(
+      date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+    )
+
+    assert_equal 0, digest.total_prs
+    assert_equal [45], sleeps
+  end
+
+  def test_inspection_redacts_token
+    token = "synthetic-secret"
+    client = github(FakeClient.new(search_responses: []), token: token)
+
+    [client.inspect, client.to_s].each { |surface| refute_includes surface, token }
+  end
+
   private
 
-  def github(client, sleeper: ->(*) {}, token: "synthetic-token")
-    Prdigest::GitHub.new(token: token, client: client, sleeper: sleeper)
+  def github(client = nil, sleeper: ->(*) {}, token: "synthetic-token", now: -> { Time.now.to_i })
+    Prdigest::GitHub.new(token: token, client: client, sleeper: sleeper, now: now)
   end
 
   def tokyo_window

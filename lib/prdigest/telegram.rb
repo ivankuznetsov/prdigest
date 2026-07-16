@@ -9,6 +9,7 @@ require "uri"
 module Prdigest
   class Telegram
     MAX_ATTEMPTS = 3
+    MAX_RETRY_WAIT = 60
     API_ORIGIN = "https://api.telegram.org"
 
     class NetHTTPTransport
@@ -16,6 +17,7 @@ module Prdigest
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+        http.verify_hostname = true if http.respond_to?(:verify_hostname=)
         http.open_timeout = open_timeout
         http.read_timeout = read_timeout
         http.write_timeout = write_timeout if http.respond_to?(:write_timeout=)
@@ -29,13 +31,15 @@ module Prdigest
       @allowlist = Array(allowlist).map { |id| Integer(id) }.freeze
       @transport = transport
       @sleeper = sleeper
+      @delivered_chunk = false
     end
 
     def deliver(chunks)
       refuse_unlisted_chat! unless @allowlist.include?(@chat_id)
-      Array(chunks).each_with_index do |chunk, index|
-        @sleeper.call(1) if index.positive?
+      Array(chunks).each do |chunk|
+        @sleeper.call(1) if @delivered_chunk
         deliver_chunk(chunk.to_s)
+        @delivered_chunk = true
       end
       true
     end
@@ -50,6 +54,7 @@ module Prdigest
 
     def deliver_chunk(text)
       attempts = 0
+      waited = 0
       loop do
         attempts += 1
         begin
@@ -62,13 +67,13 @@ module Prdigest
           )
         rescue StandardError => e
           fail_send!("transport") unless transient_transport?(e) && attempts < MAX_ATTEMPTS
-          wait!(attempts, "transport")
+          waited = wait!(attempts, "transport", waited)
           next
         end
         disposition, delay, kind = classify_response(response)
         return true if disposition == :success
         fail_send!(kind) unless disposition == :retry && attempts < MAX_ATTEMPTS
-        wait!(delay || attempts, kind)
+        waited = wait!(delay || attempts, kind, waited)
       end
     end
 
@@ -109,10 +114,12 @@ module Prdigest
         error.is_a?(SocketError) || error.is_a?(SystemCallError)
     end
 
-    def wait!(seconds, kind)
+    def wait!(seconds, kind, waited)
       delay = Integer(seconds, exception: false)
-      fail_send!("retry_wait_exceeded") unless delay && delay <= 60
+      total = waited + delay.to_i
+      fail_send!("retry_wait_exceeded") unless delay && total <= MAX_RETRY_WAIT
       @sleeper.call(delay)
+      total
     rescue SendError
       raise
     rescue StandardError

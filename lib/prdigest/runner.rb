@@ -110,6 +110,13 @@ module Prdigest
       )
     end
 
+    def inspect
+      "#<#{self.class} mode=#{@date ? "explicit_date_replay" : "scheduled"} " \
+        "dry_run=#{@dry_run} credentials=[REDACTED]>"
+    end
+
+    alias to_s inspect
+
     private
 
     def expand_skip(audit)
@@ -127,7 +134,7 @@ module Prdigest
     end
 
     def remaining_days(requested, failed_date)
-      return [] unless failed_date
+      return requested unless failed_date
       index = requested.index(failed_date)
       index ? requested.drop(index) : [failed_date]
     end

@@ -10,10 +10,11 @@ module Prdigest
     VERSION = 1
     Record = Data.define(:last_digested_date, :last_skip)
 
-    def initialize(path:, timezone:, rename: File.method(:rename))
+    def initialize(path:, timezone:, rename: File.method(:rename), directory_sync: nil)
       @path = File.expand_path(path)
       @timezone = timezone
       @rename = rename
+      @directory_sync = directory_sync || method(:sync_directory)
     end
 
     def read(yesterday: nil)
@@ -35,20 +36,54 @@ module Prdigest
 
       File.open(temp_path, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
         file.write(payload)
+        file.chmod(0o600)
         file.flush
         file.fsync
       end
+      rollback_path = preserve_previous_checkpoint(directory)
       @rename.call(temp_path, @path)
-      File.chmod(0o600, @path)
-      File.open(directory, File::RDONLY) { |dir| dir.fsync }
+      begin
+        @directory_sync.call(directory)
+      rescue StandardError
+        restore_previous_checkpoint(rollback_path)
+        raise
+      end
       Record.new(Date.iso8601(last_digested_date.to_s), normalize_skip(last_skip))
     rescue StandardError => e
       raise StateError, "cannot write state: #{e.class}"
     ensure
       File.unlink(temp_path) if defined?(temp_path) && temp_path && File.exist?(temp_path)
+      discard_rollback(rollback_path) if defined?(rollback_path) && rollback_path
     end
 
     private
+
+    def sync_directory(directory)
+      File.open(directory, File::RDONLY) { |dir| dir.fsync }
+    end
+
+    def preserve_previous_checkpoint(directory)
+      rollback_path = File.join(directory, ".#{File.basename(@path)}.rollback-#{SecureRandom.hex(8)}")
+      File.link(@path, rollback_path)
+      rollback_path
+    rescue Errno::ENOENT
+      nil
+    end
+
+    def restore_previous_checkpoint(rollback_path)
+      if rollback_path
+        File.rename(rollback_path, @path)
+      else
+        File.unlink(@path)
+      end
+    rescue Errno::ENOENT
+      raise if rollback_path
+      nil
+    end
+
+    def discard_rollback(rollback_path)
+      FileUtils.rm_f(rollback_path) if rollback_path
+    end
 
     def validate_payload!(payload, yesterday:)
       raise StateError, "state root must be an object" unless payload.is_a?(Hash)

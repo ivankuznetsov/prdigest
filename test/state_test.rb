@@ -55,4 +55,30 @@ class StateTest < Minitest::Test
     assert_equal original, File.binread(@path)
     assert_empty Dir.glob(File.join(@dir, ".state.json.tmp-*"))
   end
+
+  def test_failed_post_rename_directory_sync_restores_previous_file
+    @state.write(last_digested_date: Date.new(2026, 1, 1))
+    original = File.binread(@path)
+    state = Prdigest::State.new(
+      path: @path,
+      timezone: "Europe/London",
+      directory_sync: ->(*) { raise Errno::EIO }
+    )
+
+    assert_raises(Prdigest::StateError) { state.write(last_digested_date: Date.new(2026, 1, 2)) }
+    assert_equal original, File.binread(@path)
+    assert_empty Dir.glob(File.join(@dir, ".state.json.*-*"))
+  end
+
+  def test_failed_first_post_rename_directory_sync_removes_new_file
+    state = Prdigest::State.new(
+      path: @path,
+      timezone: "Europe/London",
+      directory_sync: ->(*) { raise Errno::EIO }
+    )
+
+    assert_raises(Prdigest::StateError) { state.write(last_digested_date: Date.new(2026, 1, 1)) }
+    refute_path_exists @path
+    assert_empty Dir.glob(File.join(@dir, ".state.json.*-*"))
+  end
 end

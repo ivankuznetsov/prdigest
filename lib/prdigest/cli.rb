@@ -9,8 +9,14 @@ module Prdigest
     class ParseError < StandardError; end
 
     desc "run", "Build and send (or dry-run) a merged-PR digest for one local day"
+    def run_cmd; end
+    map "run" => :run_cmd
+
     desc "version", "Print version"
+    def version; end
+
     desc "serve", "Compatibility stub; use the systemd timer"
+    def serve; end
 
     class << self
       def invoke(argv = ARGV, out: $stdout, err: $stderr, env: ENV,
@@ -73,6 +79,8 @@ module Prdigest
         until args.empty?
           argument = args.shift
           case argument
+          when "--help", "-h"
+            parsed[:command] = "help"
           when "--dry-run"
             parsed[:dry_run] = true
           when "--json"
@@ -115,8 +123,17 @@ module Prdigest
             out.puts "prdigest: success; settled=#{result.settled_days.length} skipped=#{result.skipped_days.length}"
           end
         else
+          if result.status == "partial_failure"
+            err.puts "prdigest: progress; settled=#{human_dates(result.settled_days)} " \
+                     "skipped=#{human_dates(result.skipped_days)} remaining=#{human_dates(result.remaining_days)}"
+          end
           err.puts "prdigest: #{result.error[:kind]}: #{result.error[:message]}"
         end
+      end
+
+      def human_dates(dates)
+        values = Array(dates)
+        values.empty? ? "none" : values.join(",")
       end
 
       def print_version(out)
