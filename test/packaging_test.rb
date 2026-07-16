@@ -18,6 +18,15 @@ class PackagingTest < Minitest::Test
     dockerfile = File.read(File.join(ROOT, "Dockerfile"))
     assert_match(/apk add .*tzdata/, dockerfile)
     assert_match(/^USER prdigest$/, dockerfile)
+    refute_match(/^COPY \. \.$/, dockerfile)
+
+    dockerignore = File.readlines(File.join(ROOT, ".dockerignore"), chomp: true).reject do |line|
+      line.empty? || line.start_with?("#")
+    end
+    assert_equal "**", dockerignore.first
+    %w[!Dockerfile !Gemfile !prdigest.gemspec !lib/** !exe/**].each do |entry|
+      assert_includes dockerignore, entry
+    end
   end
 
   def test_systemd_owns_state_and_bounds_runtime

@@ -8,7 +8,9 @@ RUN apk add --no-cache ca-certificates tzdata \
     && install -d -m 0750 -o root -g prdigest /etc/prdigest
 
 WORKDIR /app
-COPY . .
+COPY Gemfile prdigest.gemspec ./
+COPY lib ./lib
+COPY exe ./exe
 RUN bundle config set without development \
     && bundle install \
     && apk del .build-deps
