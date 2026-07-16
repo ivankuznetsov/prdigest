@@ -20,6 +20,14 @@ module Prdigest
       super(message)
     end
   end
+  class SendError < Error
+    attr_reader :kind
+
+    def initialize(message, kind: "telegram")
+      @kind = kind
+      super(message)
+    end
+  end
 end
 
 require_relative "prdigest/version"
@@ -28,6 +36,7 @@ require_relative "prdigest/config"
 require_relative "prdigest/digest"
 require_relative "prdigest/github"
 require_relative "prdigest/renderer"
+require_relative "prdigest/telegram"
 require_relative "prdigest/schedule"
 require_relative "prdigest/state"
 require_relative "prdigest/runner"
