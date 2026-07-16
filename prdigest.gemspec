@@ -33,7 +33,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency "octokit", "~> 9.0"
   spec.add_dependency "faraday-retry", "~> 2.2"
   spec.add_dependency "tzinfo", "~> 2.0"
+  spec.add_dependency "erb", ">= 4.0"
 
   spec.add_development_dependency "minitest", "~> 5.25"
   spec.add_development_dependency "rake", "~> 13.0"
+  spec.add_development_dependency "webmock", "~> 3.25"
 end
