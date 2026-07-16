@@ -5,6 +5,7 @@ schedule:
   # Prefer systemd timer + `prdigest run` for v1.
   # serve mode may honor this later.
   cron: "5 9 * * *"
+  # Newest retained catch-up window; valid range is 1..30.
   max_catchup_days: 7
 
 github:

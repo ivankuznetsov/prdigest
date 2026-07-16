@@ -8,6 +8,16 @@ module Prdigest
   class Config
     attr_reader :raw, :path
 
+    def self.resolve_path(explicit: nil, env: ENV, system_path: "/etc/prdigest/config.yml")
+      return File.expand_path(explicit) if explicit && !explicit.to_s.empty?
+
+      from_env = env["PRDIGEST_CONFIG"].to_s
+      return File.expand_path(from_env) unless from_env.empty?
+      return system_path if File.file?(system_path)
+
+      raise ConfigError, "config path is required (--config, PRDIGEST_CONFIG, or /etc/prdigest/config.yml)"
+    end
+
     def self.load(path)
       path = File.expand_path(path)
       raise ConfigError, "config not found: #{path}" unless File.file?(path)
@@ -35,14 +45,14 @@ module Prdigest
       Array(raw.dig("github", "repos")).map(&:to_s).map(&:strip).reject(&:empty?)
     end
 
-    def github_token
+    def github_token(env = ENV)
       env_name = raw.dig("github", "token_env") || "GITHUB_TOKEN"
-      ENV[env_name.to_s].to_s
+      env[env_name.to_s].to_s
     end
 
-    def telegram_token
+    def telegram_token(env = ENV)
       env_name = raw.dig("telegram", "token_env") || "TELEGRAM_BOT_TOKEN"
-      ENV[env_name.to_s].to_s
+      env[env_name.to_s].to_s
     end
 
     def chat_id
