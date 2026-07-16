@@ -43,6 +43,14 @@ class GithubTest < Minitest::Test
     assert_empty client.details
   end
 
+  def test_accepts_false_and_zero_fields_from_json_hashes
+    response = JSON.parse('{"total_count":0,"incomplete_results":false,"items":[]}')
+    digest = github(FakeClient.new(search_responses: [response])).fetch(
+      date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+    )
+    assert_equal 0, digest.total_prs
+  end
+
   def test_rejects_incomplete_over_cap_wrong_repo_and_outside_window
     invalid = [
       Response.new(total_count: 1, incomplete_results: true, items: []),

@@ -34,7 +34,12 @@ class StateTest < Minitest::Test
       JSON.generate(version: 2, timezone: "Europe/London", last_digested_date: "2026-01-01"),
       JSON.generate(version: 1, timezone: "UTC", last_digested_date: "2026-01-01"),
       JSON.generate(version: 1, timezone: "Europe/London", last_digested_date: "bad"),
-      JSON.generate(version: 1, timezone: "Europe/London", last_digested_date: "2026-01-11")
+      JSON.generate(version: 1, timezone: "Europe/London", last_digested_date: "2026-01-11"),
+      JSON.generate(version: 1, timezone: "Europe/London"),
+      JSON.generate(
+        version: 1, timezone: "Europe/London", last_digested_date: "2026-01-03",
+        last_skip: { start_date: "2026-01-01", end_date: "2026-01-04", notice_pending: true }
+      )
     ]
     invalid.each do |payload|
       File.write(@path, payload)

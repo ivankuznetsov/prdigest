@@ -111,7 +111,10 @@ module Prdigest
     end
 
     def optional_field(object, key)
-      return object[key] || object[key.to_s] if object.respond_to?(:key?)
+      if object.respond_to?(:key?)
+        return object[key] if object.key?(key)
+        return object[key.to_s] if object.key?(key.to_s)
+      end
       return object.public_send(key) if object.respond_to?(key)
     end
 

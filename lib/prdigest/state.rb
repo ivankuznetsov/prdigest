@@ -54,12 +54,16 @@ module Prdigest
       raise StateError, "state root must be an object" unless payload.is_a?(Hash)
       raise StateError, "unsupported state version" unless payload["version"] == VERSION
       raise StateError, "state timezone does not match config" unless payload["timezone"] == @timezone
+      raise StateError, "state last_digested_date is required" unless payload.key?("last_digested_date")
 
       value = payload["last_digested_date"]
-      last_date = value.nil? ? nil : Date.iso8601(value)
+      last_date = Date.iso8601(value)
       raise StateError, "state date is in the future" if yesterday && last_date && last_date > Date.iso8601(yesterday.to_s)
 
       skip = parse_skip(payload["last_skip"])
+      if skip && (skip[:start_date] > skip[:end_date] || skip[:end_date] > last_date)
+        raise StateError, "state last_skip range is invalid"
+      end
       Record.new(last_date, skip)
     rescue Date::Error, TypeError
       raise StateError, "state contains an invalid date"
@@ -69,10 +73,12 @@ module Prdigest
       return nil if value.nil?
       raise StateError, "state last_skip is invalid" unless value.is_a?(Hash)
 
+      pending = value.fetch("notice_pending")
+      raise StateError, "state last_skip is invalid" unless pending == true || pending == false
       {
         start_date: Date.iso8601(value.fetch("start_date")),
         end_date: Date.iso8601(value.fetch("end_date")),
-        notice_pending: value.fetch("notice_pending") == true
+        notice_pending: pending
       }
     rescue KeyError
       raise StateError, "state last_skip is invalid"
