@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "rake/testtask"
+require "bundler/gem_tasks"
 
 Rake::TestTask.new(:test) do |t|
   t.libs << "test"
@@ -9,3 +10,8 @@ Rake::TestTask.new(:test) do |t|
 end
 
 task default: :test
+
+desc "Run the release package smoke test"
+task smoke: :test do
+  sh "test/smoke/gem_install.sh"
+end

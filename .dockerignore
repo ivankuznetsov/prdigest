@@ -1,0 +1,15 @@
+.git
+.github
+.bundle
+vendor
+tmp
+pkg
+test
+wiki
+scripts
+bin
+.env
+.env.*
+Gemfile.lock
+*.gem
+*.log
