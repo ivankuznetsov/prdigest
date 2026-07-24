@@ -3,4 +3,4 @@
 
 require "prdigest"
 
-Prdigest::CLI.start(ARGV)
+exit Prdigest::CLI.invoke(ARGV)

@@ -2,6 +2,8 @@
 Description=Daily prdigest merged-PR digest
 
 [Timer]
+# Uses the host timezone. Match it to config.yml so 09:05 leaves a nine-hour
+# indexing buffer after the previous local day.
 OnCalendar=*-*-* 09:05:00
 Persistent=true
 Unit=prdigest.service

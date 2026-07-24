@@ -16,14 +16,16 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["source_code_uri"] = "#{spec.homepage}/tree/main"
   spec.metadata["bug_tracker_uri"] = "#{spec.homepage}/issues"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.files = Dir.chdir(__dir__) do
-    `git ls-files -z`.split("\x0").reject do |f|
-      f.start_with?("test/", ".git", "bin/prdigest") || f == "Gemfile.lock"
-    end
+    patterns = [
+      "lib/**/*.rb", "exe/prdigest", "configs/config.example.yml",
+      "scripts/systemd/*", "README.md", "SECURITY.md", "CHANGELOG.md", "LICENSE"
+    ]
+    patterns.flat_map { |pattern| Dir.glob(pattern) }.select { |path| File.file?(path) }.uniq.sort
   end
   spec.bindir        = "exe"
   spec.executables   = ["prdigest"]
@@ -32,7 +34,10 @@ Gem::Specification.new do |spec|
   spec.add_dependency "thor", "~> 1.3"
   spec.add_dependency "octokit", "~> 9.0"
   spec.add_dependency "faraday-retry", "~> 2.2"
+  spec.add_dependency "tzinfo", "~> 2.0"
+  spec.add_dependency "erb", ">= 4.0", "< 7.0"
 
   spec.add_development_dependency "minitest", "~> 5.25"
   spec.add_development_dependency "rake", "~> 13.0"
+  spec.add_development_dependency "webmock", "~> 3.25"
 end

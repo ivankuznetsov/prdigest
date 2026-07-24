@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!.dockerignore
+!Gemfile
+!prdigest.gemspec
+!lib/
+!lib/**
+!exe/
+!exe/**
