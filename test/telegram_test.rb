@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tmpdir"
 
 class TelegramTest < Minitest::Test
   Response = Struct.new(:code, :body, keyword_init: true)
@@ -38,7 +39,7 @@ class TelegramTest < Minitest::Test
 
   def test_sends_expected_json_to_fixed_tls_origin
     transport = FakeTransport.new([ok])
-    sender(transport: transport).deliver(["<b>Hello</b>"])
+    deliver(sender(transport: transport), ["<b>Hello</b>"])
     call = transport.calls.fetch(0)
     assert_equal "https", call[:uri].scheme
     assert_equal "api.telegram.org", call[:uri].host
@@ -54,7 +55,7 @@ class TelegramTest < Minitest::Test
   def test_refuses_unlisted_chat_before_transport
     transport = FakeTransport.new([ok])
     error = assert_raises(Prdigest::SendError) do
-      sender(transport: transport, chat_id: 2, allowlist: [1]).deliver(["hello"])
+      deliver(sender(transport: transport, chat_id: 2, allowlist: [1]), ["hello"])
     end
     assert_equal "telegram_refused", error.kind
     assert_empty transport.calls
@@ -64,18 +65,23 @@ class TelegramTest < Minitest::Test
     sleeps = []
     limited = Response.new(code: "429", body: fixture("rate_limited.json"))
     transport = FakeTransport.new([limited, ok])
-    sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds }).deliver(["hello"])
+    deliver(sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds }), ["hello"])
     assert_equal [2], sleeps
     assert_equal 2, transport.calls.length
 
     excessive = Response.new(code: "429", body: JSON.generate(ok: false, parameters: { retry_after: 61 }))
     error = assert_raises(Prdigest::SendError) do
-      sender(transport: FakeTransport.new([excessive]), sleeper: ->(*) { flunk "must not sleep" }).deliver(["hello"])
+      deliver(
+        sender(transport: FakeTransport.new([excessive]), sleeper: ->(*) { flunk "must not sleep" }),
+        ["hello"]
+      )
     end
     assert_match(/retry_wait_exceeded/, error.message)
 
     repeated = FakeTransport.new([limited, limited, limited])
-    assert_raises(Prdigest::SendError) { sender(transport: repeated, sleeper: ->(*) {}).deliver(["hello"]) }
+    assert_raises(Prdigest::SendError) do
+      deliver(sender(transport: repeated, sleeper: ->(*) {}), ["hello"])
+    end
     assert_equal 3, repeated.calls.length
   end
 
@@ -88,7 +94,7 @@ class TelegramTest < Minitest::Test
     transport = FakeTransport.new([limited, limited, ok])
 
     error = assert_raises(Prdigest::SendError) do
-      sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds }).deliver(["hello"])
+      deliver(sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds }), ["hello"])
     end
 
     assert_match(/retry_wait_exceeded/, error.message)
@@ -96,14 +102,15 @@ class TelegramTest < Minitest::Test
     assert_equal 2, transport.calls.length
   end
 
-  def test_retries_transport_and_server_errors_but_not_other_failures
-    transport = FakeTransport.new([Timeout::Error.new("slow synthetic-secret"), Response.new(code: "500", body: "{}"), ok])
-    sender(transport: transport, sleeper: ->(*) {}).deliver(["hello"])
-    assert_equal 3, transport.calls.length
+  def test_retries_server_errors_but_not_permanent_failures
+    transport = FakeTransport.new([Response.new(code: "500", body: "{}"), ok])
+    deliver(sender(transport: transport, sleeper: ->(*) {}), ["hello"])
+    assert_equal 2, transport.calls.length
 
     [Response.new(code: "400", body: fixture("send_error.json")), Response.new(code: "200", body: fixture("send_error.json"))].each do |response|
       transport = FakeTransport.new([response, ok])
-      assert_raises(Prdigest::SendError) { sender(transport: transport).deliver(["hello"]) }
+      error = assert_raises(Prdigest::SendError) { deliver(sender(transport: transport), ["hello"]) }
+      assert_equal "telegram_permanent", error.kind
       assert_equal 1, transport.calls.length
     end
   end
@@ -112,10 +119,78 @@ class TelegramTest < Minitest::Test
     sleeps = []
     transport = FakeTransport.new([ok, Response.new(code: "400", body: "{}")])
     assert_raises(Prdigest::SendError) do
-      sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds }).deliver(["one", "two", "three"])
+      deliver(sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds }), ["one", "two", "three"])
     end
     assert_equal [1], sleeps
     assert_equal %w[one two], transport.calls.map { |call| JSON.parse(call[:request].body).fetch("text") }
+  end
+
+  def test_retrying_a_failed_later_chunk_never_resends_the_accepted_prefix
+    Dir.mktmpdir do |root|
+      store = Prdigest::DeliveryCheckpointStore.new(root: root)
+      server_error = Response.new(code: "500", body: "{}")
+      first_transport = FakeTransport.new([ok, server_error, server_error, server_error])
+
+      error = assert_raises(Prdigest::SendError) do
+        sender(transport: first_transport, sleeper: ->(*) {}).deliver(
+          %w[one two three],
+          digest_date: Date.new(2026, 7, 23),
+          checkpoint_store: store,
+          scope: %w[acme/one acme/two]
+        )
+      end
+      assert_equal "telegram", error.kind
+      assert_equal 1, error.delivery.fetch(:accepted_chunks)
+      assert_equal 1, error.delivery.fetch(:failed_chunk)
+
+      second_transport = FakeTransport.new([ok, ok])
+      result = sender(transport: second_transport, sleeper: ->(*) {}).deliver(
+        %w[regenerated body],
+        digest_date: Date.new(2026, 7, 23),
+        checkpoint_store: store,
+        scope: %w[acme/one acme/two]
+      )
+
+      assert_equal %w[one two two two two three],
+                   (first_transport.calls + second_transport.calls).map {
+                     |call| JSON.parse(call[:request].body).fetch("text")
+                   }
+      assert_equal 3, result.fetch(:accepted_chunks)
+      assert_equal "completed", result.fetch(:status)
+    end
+  end
+
+  def test_ambiguous_transport_failure_and_permanent_400_never_replay
+    [
+      [Timeout::Error.new("response lost"), "telegram_ambiguous"],
+      [Response.new(code: "400", body: fixture("send_error.json")), "telegram_permanent"]
+    ].each do |failure, expected_kind|
+      Dir.mktmpdir do |root|
+        store = Prdigest::DeliveryCheckpointStore.new(root: root)
+        first_transport = FakeTransport.new([failure])
+        error = assert_raises(Prdigest::SendError) do
+          sender(transport: first_transport, sleeper: ->(*) {}).deliver(
+            ["one"],
+            digest_date: Date.new(2026, 7, 23),
+            checkpoint_store: store,
+            scope: ["acme/one"]
+          )
+        end
+        assert_equal expected_kind, error.kind
+
+        replay_transport = FakeTransport.new([ok])
+        replay = assert_raises(Prdigest::SendError) do
+          sender(transport: replay_transport, sleeper: ->(*) {}).deliver(
+            ["one"],
+            digest_date: Date.new(2026, 7, 23),
+            checkpoint_store: store,
+            scope: ["acme/one"]
+          )
+        end
+        assert_equal expected_kind, replay.kind
+        assert_empty replay_transport.calls
+      end
+    end
   end
 
   def test_paces_chunks_across_consecutive_deliver_calls
@@ -123,8 +198,8 @@ class TelegramTest < Minitest::Test
     transport = FakeTransport.new([ok, ok])
     client = sender(transport: transport, sleeper: ->(seconds) { sleeps << seconds })
 
-    client.deliver(["day one"])
-    client.deliver(["day two"])
+    deliver(client, ["day one"], date: Date.new(2026, 7, 22))
+    deliver(client, ["day two"], date: Date.new(2026, 7, 23))
 
     assert_equal [1], sleeps
   end
@@ -157,7 +232,7 @@ class TelegramTest < Minitest::Test
     token = "synthetic-secret"
     transport = FakeTransport.new(Array.new(3) { IOError.new("#{token} https://api.telegram.org/bot#{token}/sendMessage") })
     client = sender(transport: transport, token: token, sleeper: ->(*) {})
-    error = assert_raises(Prdigest::SendError) { client.deliver(["hello"]) }
+    error = assert_raises(Prdigest::SendError) { deliver(client, ["hello"]) }
     [error.message, error.inspect, client.inspect].each { |surface| refute_includes surface, token }
   end
 
@@ -165,6 +240,17 @@ class TelegramTest < Minitest::Test
 
   def sender(transport:, token: "synthetic-secret", chat_id: -1001, allowlist: [-1001], sleeper: ->(*) {})
     Prdigest::Telegram.new(token: token, chat_id: chat_id, allowlist: allowlist, transport: transport, sleeper: sleeper)
+  end
+
+  def deliver(client, chunks, date: Date.new(2026, 7, 23), scope: ["acme/one"])
+    Dir.mktmpdir do |root|
+      client.deliver(
+        chunks,
+        digest_date: date,
+        checkpoint_store: Prdigest::DeliveryCheckpointStore.new(root: root),
+        scope: scope
+      )
+    end
   end
 
   def ok

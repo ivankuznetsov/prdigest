@@ -34,14 +34,22 @@ module Prdigest
       @delivered_chunk = false
     end
 
-    def deliver(chunks)
+    def deliver(chunks, digest_date:, checkpoint_store:, scope:)
       refuse_unlisted_chat! unless @allowlist.include?(@chat_id)
-      Array(chunks).each do |chunk|
-        @sleeper.call(1) if @delivered_chunk
-        deliver_chunk(chunk.to_s)
-        @delivered_chunk = true
+      checkpoint_store.with_checkpoint(
+        date: digest_date,
+        chat_id: @chat_id,
+        scope: scope,
+        chunks: chunks
+      ) do |delivery|
+        @delivered_chunk ||= delivery.next_chunk.positive?
+        (delivery.next_chunk...delivery.chunks.length).each do |index|
+          @sleeper.call(1) if @delivered_chunk
+          deliver_chunk(delivery, index)
+          @delivered_chunk = true
+        end
+        delivery.delivery
       end
-      true
     end
 
     def inspect
@@ -52,28 +60,45 @@ module Prdigest
 
     private
 
-    def deliver_chunk(text)
+    def deliver_chunk(delivery, index)
       attempts = 0
       waited = 0
       loop do
         attempts += 1
+        delivery.begin_attempt(index)
         begin
           response = @transport.call(
             uri: request_uri,
-            request: build_request(text),
+            request: build_request(delivery.chunks.fetch(index)),
             open_timeout: 10,
             read_timeout: 30,
             write_timeout: 30
           )
         rescue StandardError => e
-          fail_send!("transport") unless transient_transport?(e) && attempts < MAX_ATTEMPTS
-          waited = wait!(attempts, "transport", waited)
-          next
+          fail_ambiguous!(delivery, index, e)
         end
+
         disposition, delay, kind = classify_response(response)
-        return true if disposition == :success
-        fail_send!(kind) unless disposition == :retry && attempts < MAX_ATTEMPTS
-        waited = wait!(delay || attempts, kind, waited)
+        if disposition == :success
+          delivery.accept(index)
+          return true
+        end
+
+        permanent = disposition == :failure
+        delivery.reject(
+          index,
+          kind: permanent ? "telegram_permanent" : "telegram",
+          message: failure_message(kind),
+          permanent: permanent
+        )
+        fail_send!(
+          delivery,
+          index,
+          kind: permanent ? "telegram_permanent" : "telegram",
+          reason: kind
+        ) if permanent || attempts >= MAX_ATTEMPTS
+
+        waited = wait!(delay || attempts, kind, waited, delivery, index)
       end
     end
 
@@ -109,29 +134,47 @@ module Prdigest
       code && (500..599).cover?(code) ? [:retry, nil, "server"] : [:failure, nil, "invalid_response"]
     end
 
-    def transient_transport?(error)
-      error.is_a?(Timeout::Error) || error.is_a?(IOError) ||
-        error.is_a?(SocketError) || error.is_a?(SystemCallError)
-    end
-
-    def wait!(seconds, kind, waited)
+    def wait!(seconds, kind, waited, delivery, index)
       delay = Integer(seconds, exception: false)
       total = waited + delay.to_i
-      fail_send!("retry_wait_exceeded") unless delay && total <= MAX_RETRY_WAIT
+      fail_send!(delivery, index, reason: "retry_wait_exceeded") unless delay && total <= MAX_RETRY_WAIT
       @sleeper.call(delay)
       total
     rescue SendError
       raise
     rescue StandardError
-      fail_send!(kind)
+      fail_send!(delivery, index, reason: kind)
     end
 
     def refuse_unlisted_chat!
       raise SendError.new("Telegram delivery refused: chat is not allowlisted", kind: "telegram_refused")
     end
 
-    def fail_send!(kind)
-      raise SendError.new("Telegram send failed (#{kind})", kind: "telegram")
+    def fail_ambiguous!(delivery, index, error)
+      reason = case error
+               when Timeout::Error then "timeout"
+               when IOError then "io"
+               when SocketError then "socket"
+               when SystemCallError then "system"
+               else "transport"
+               end
+      raise SendError.new(
+        "Telegram send outcome is ambiguous (#{reason})",
+        kind: "telegram_ambiguous",
+        delivery: delivery.delivery(failed_chunk: index)
+      )
+    end
+
+    def fail_send!(delivery, index, kind: "telegram", reason:)
+      raise SendError.new(
+        failure_message(reason),
+        kind: kind,
+        delivery: delivery.delivery(failed_chunk: index)
+      )
+    end
+
+    def failure_message(reason)
+      "Telegram send failed (#{reason})"
     end
   end
 end

@@ -33,6 +33,20 @@ class ConfigTest < Minitest::Test
     assert_equal ["ivankuznetsov/hive"], cfg.repos
     assert_equal(-1001, Integer(cfg.chat_id))
     assert_equal 7, cfg.max_catchup_days
+    assert_equal File.expand_path("~/.local/share/prdigest/deliveries"), cfg.delivery_state_path
+  end
+
+  def test_delivery_state_defaults_next_to_cursor_and_can_be_overridden
+    path = write_config(
+      "github" => { "repos" => ["o/r"] },
+      "telegram" => { "chat_id" => 1, "chat_id_allowlist" => [1] },
+      "state" => { "path" => "/var/lib/prdigest/cursor.json" }
+    )
+    assert_equal "/var/lib/prdigest/deliveries", Prdigest::Config.load(path).delivery_state_path
+
+    raw = YAML.safe_load_file(path)
+    raw["state"]["delivery_path"] = "/run/prdigest/delivery"
+    assert_equal "/run/prdigest/delivery", Prdigest::Config.new(raw).delivery_state_path
   end
 
   def test_validates_timezone_cap_and_repository_shape

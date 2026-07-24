@@ -52,6 +52,7 @@ digest:
   empty_message: "Merged PR digest — {date}\nTotal: 0 PRs"
 state:
   path: /var/lib/prdigest/state.json
+  delivery_path: /var/lib/prdigest/deliveries
 ```
 
 Repository order controls digest order. `max_catchup_days` must be `1..30`.
@@ -62,7 +63,7 @@ values belong in environment variables, never YAML.
 ## Commands and results
 
 ```sh
-prdigest run [--config PATH] [--date YYYY-MM-DD] [--dry-run] [--json]
+prdigest run [--config PATH] [--date YYYY-MM-DD] [--dry-run] [--json] [--repo OWNER/NAME ...]
 prdigest serve
 prdigest version
 ```
@@ -72,10 +73,16 @@ state after each settled day. `--date` replays exactly that local date and never
 reads or writes state. `--dry-run` previews the explicit date or yesterday,
 requires GitHub access, and constructs neither state nor Telegram delivery.
 `serve` remains a compatibility stub; use the supplied timer.
+Repeatable `--repo` values replace the configured repository list for that run.
+They use the same strict `owner/name` validation and deterministic order as the
+configuration, which lets callers such as Hive supply their registered projects
+without owning a second digest implementation.
 
-`--json` emits one document with `status`, `mode`, `requested_days`,
+`--json` emits a versioned `prdigest-result` document with `status`, `mode`, `requested_days`,
 `settled_days`, `skipped_days`, `failed_date`, `remaining_days`, nullable
-`error`, and dry-run `chunks`. Modes are `scheduled` and
+`error`, dry-run `chunks`, and nullable structured `delivery` progress.
+`delivery` reports `accepted_chunks`, `total_chunks`, `status`, and, on failure,
+`failed_chunk`. Modes are `scheduled` and
 `explicit_date_replay`; statuses are `success`, `dry_run`, `failure`, and
 `partial_failure`.
 
@@ -97,9 +104,22 @@ the first Telegram message. A day is settled only after every chunk succeeds,
 an enabled empty message succeeds, or an empty message is intentionally
 suppressed.
 
-Delivery is at least once. If a later chunk or the following state write fails,
-the date remains unsettled and the next invocation resends all chunks; earlier
-messages can therefore be duplicated.
+Before sending, PRDigest stores the complete rendered chunk list in
+`state.delivery_path`. It marks one chunk in flight before each request and
+advances `next_chunk` only after Telegram definitely accepts it. A definite
+429/5xx rejection receives at most three attempts; a later invocation resumes
+the original rendered payload at the next unsent chunk. If the date cursor write
+fails after complete delivery, the retry observes the completed delivery
+checkpoint and sends nothing before repairing the cursor.
+
+Telegram 400/invalid-response failures are permanent. Transport failures are
+ambiguous because Telegram might have accepted the request before the
+connection failed. Both cases remain parked and never replay automatically.
+Inspect the checkpoint and Telegram chat, reconcile the uncertain chunk, then
+move the checkpoint aside only when an intentional operator replay is safe.
+Changing the chat or repository scope for an existing date also fails closed.
+Explicit `--date` uses this same safety ledger, so a completed date is a no-op
+unless its checkpoint is deliberately archived first.
 
 State is secret-free JSON version 1:
 
@@ -109,7 +129,9 @@ State is secret-free JSON version 1:
 
 It may include a `last_skip` audit with `start_date`, `end_date`, and
 `notice_pending`. Writes use an atomic mode-`0600` replacement and directory
-fsync. Missing state means first run and requests yesterday only. Malformed,
+fsync. Delivery directories are mode `0700`; delivery files and locks are mode
+`0600`, and a per-date lock prevents concurrent sends for the same checkpoint.
+Missing state means first run and requests yesterday only. Malformed,
 future, unsupported, unreadable, or timezone-mismatched state fails closed with
 exit 5.
 
@@ -178,18 +200,23 @@ bodies, message text, or private titles.
 
 - Exit 2: check config discovery, YAML, timezone, cap, chat allowlist, and env.
 - Exit 3: check repository access, rate/search limits, and replay later.
-- Exit 4: check bot membership, allowlisted chat, Telegram status, and flood wait.
+- Exit 4: inspect `error.kind` and `delivery`. Retry ordinary `telegram` failures;
+  reconcile `telegram_ambiguous`, `telegram_permanent`, and
+  `delivery_checkpoint_permanent` before moving any checkpoint.
 - Exit 5: check `/var/lib/prdigest`, mode/owner, JSON version, date, and timezone.
 - Exit 6: earlier dates or a skipped prefix are durable; inspect the result before retry.
 
-Concurrent manual scheduled runs are unsupported in v0.1.0. The systemd oneshot
-is the single-run coordination mechanism.
+Concurrent scheduled runs remain unsupported because date-cursor scheduling is
+single-owner. Delivery itself takes a nonblocking per-date lock, so a competing
+sender fails instead of duplicating the same payload. The systemd oneshot is the
+normal run coordination mechanism.
 
 See [SECURITY.md](SECURITY.md) for token scope, rotation, and private-data flow.
 
 ## Non-goals
 
-v0.1.0 has no Hive integration, LLM content, web UI, interactive bot commands,
+v0.1.0 has no built-in Hive configuration discovery, LLM content, web UI,
+interactive bot commands,
 multi-chat routing, organization discovery, non-GitHub forge support, or
 long-running scheduler. This repository prepares v0.1.0 without tagging,
 publishing the gem, or creating a release.

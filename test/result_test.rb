@@ -13,7 +13,13 @@ class ResultTest < Minitest::Test
   end
 
   def test_maps_failures_and_partial_progress_to_public_exits
-    { "config" => 2, "cli" => 2, "github" => 3, "telegram" => 4, "state" => 5, "render" => 1 }.each do |kind, code|
+    {
+      "config" => 2, "cli" => 2, "github" => 3,
+      "telegram" => 4, "telegram_refused" => 4, "telegram_permanent" => 4,
+      "telegram_ambiguous" => 4, "delivery_checkpoint" => 4,
+      "delivery_checkpoint_permanent" => 4,
+      "state" => 5, "render" => 1
+    }.each do |kind, code|
       result = Prdigest::Result.failure(mode: "scheduled", error_kind: kind, message: "safe")
       assert_equal code, result.exit_code
     end

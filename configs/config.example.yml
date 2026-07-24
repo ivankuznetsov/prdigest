@@ -28,3 +28,5 @@ digest:
 
 state:
   path: /var/lib/prdigest/state.json
+  # Stable rendered chunks and next-unsent position, separate from the date cursor.
+  delivery_path: /var/lib/prdigest/deliveries

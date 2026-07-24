@@ -15,6 +15,9 @@ module Prdigest
       @repositories = repositories || config.repos
       @github = github || GitHub.new(token: config.github_token(env))
       @renderer = renderer || Renderer.new(send_empty: config.send_empty?, empty_message: config.empty_message)
+      @delivery_checkpoint_store_factory = lambda {
+        DeliveryCheckpointStore.new(root: config.delivery_state_path)
+      }
       @telegram_factory = telegram_factory || lambda {
         Telegram.new(
           token: config.telegram_token(env),
@@ -31,6 +34,7 @@ module Prdigest
       skipped = []
       chunks = []
       failed_date = nil
+      delivery = nil
       state = nil
       skip_audit = nil
 
@@ -77,7 +81,12 @@ module Prdigest
 
         unless rendered.chunks.empty?
           telegram ||= @telegram_factory.call
-          telegram.deliver(rendered.chunks)
+          delivery = telegram.deliver(
+            rendered.chunks,
+            digest_date: date,
+            checkpoint_store: @delivery_checkpoint_store_factory.call,
+            scope: @repositories
+          )
         end
         if state
           if skip_audit
@@ -95,7 +104,8 @@ module Prdigest
         requested_days: requested,
         settled_days: settled,
         skipped_days: skipped,
-        chunks: chunks
+        chunks: chunks,
+        delivery: delivery
       )
     rescue StandardError => e
       Result.failure(
@@ -107,7 +117,8 @@ module Prdigest
         skipped_days: skipped || [],
         failed_date: failed_date,
         remaining_days: remaining_days(requested || [], failed_date),
-        chunks: chunks || []
+        chunks: chunks || [],
+        delivery: e.is_a?(SendError) ? e.delivery : delivery
       )
     end
 

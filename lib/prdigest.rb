@@ -21,10 +21,11 @@ module Prdigest
     end
   end
   class SendError < Error
-    attr_reader :kind
+    attr_reader :kind, :delivery
 
-    def initialize(message, kind: "telegram")
+    def initialize(message, kind: "telegram", delivery: {})
       @kind = kind
+      @delivery = delivery.transform_keys(&:to_sym).freeze
       super(message)
     end
   end
@@ -36,6 +37,7 @@ require_relative "prdigest/config"
 require_relative "prdigest/digest"
 require_relative "prdigest/github"
 require_relative "prdigest/renderer"
+require_relative "prdigest/delivery_checkpoint_store"
 require_relative "prdigest/telegram"
 require_relative "prdigest/result"
 require_relative "prdigest/schedule"

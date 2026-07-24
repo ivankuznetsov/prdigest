@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tmpdir"
 
 class RunnerTest < Minitest::Test
   Window = Prdigest::Clock::Window
@@ -74,9 +75,35 @@ class RunnerTest < Minitest::Test
       @batches = []
     end
 
-    def deliver(chunks)
+    def deliver(chunks, digest_date:, checkpoint_store:, scope:)
       @batches << chunks
       raise @error if @error
+      {
+        accepted_chunks: chunks.length,
+        total_chunks: chunks.length,
+        status: "completed"
+      }
+    end
+  end
+
+  class CheckpointingTelegram
+    attr_reader :network_sends
+
+    def initialize
+      @network_sends = []
+    end
+
+    def deliver(chunks, digest_date:, checkpoint_store:, scope:)
+      checkpoint_store.with_checkpoint(
+        date: digest_date, chat_id: 1, scope: scope, chunks: chunks
+      ) do |delivery|
+        (delivery.next_chunk...delivery.chunks.length).each do |index|
+          delivery.begin_attempt(index)
+          @network_sends << delivery.chunks.fetch(index)
+          delivery.accept(index)
+        end
+        delivery.delivery
+      end
     end
   end
 
@@ -91,6 +118,7 @@ class RunnerTest < Minitest::Test
     assert_equal [date(10)], github.dates
     assert_equal [date(10)], state.writes.map { |write| write[:last_digested_date] }
     assert_equal [["digest"]], telegram.batches
+    assert_equal 1, result.delivery.fetch(:accepted_chunks)
   end
 
   def test_over_cap_skip_is_checkpointed_before_fetch_failure
@@ -142,6 +170,38 @@ class RunnerTest < Minitest::Test
     assert_empty result.settled_days
   end
 
+  def test_state_failure_after_delivery_does_not_resend_completed_chunks
+    Dir.mktmpdir do |root|
+      telegram = CheckpointingTelegram.new
+      failing_state = FakeState.new(
+        Prdigest::State::Record.new(nil, nil),
+        write_error: Prdigest::StateError.new("state unavailable")
+      )
+
+      first = runner(
+        state: failing_state,
+        github: FakeGitHub.new,
+        telegram: telegram,
+        delivery_state_path: File.join(root, "deliveries")
+      ).call
+      assert_equal "state", first.error.fetch(:kind)
+      assert_equal ["digest"], telegram.network_sends
+      assert_equal "completed", first.delivery.fetch(:status)
+
+      recovered_state = FakeState.new(Prdigest::State::Record.new(nil, nil))
+      second = runner(
+        state: recovered_state,
+        github: FakeGitHub.new,
+        telegram: telegram,
+        renderer: FakeRenderer.new(chunks: ["regenerated"]),
+        delivery_state_path: File.join(root, "deliveries")
+      ).call
+      assert_equal "success", second.status
+      assert_equal ["digest"], telegram.network_sends
+      assert_equal [date(10)], recovered_state.writes.map { |write| write.fetch(:last_digested_date) }
+    end
+  end
+
   def test_replay_and_dry_run_never_construct_state_or_telegram
     github = FakeGitHub.new
     forbidden = -> { flunk "dependency must not be constructed" }
@@ -188,8 +248,10 @@ class RunnerTest < Minitest::Test
 
   def runner(state: nil, github:, telegram: FakeTelegram.new, renderer: FakeRenderer.new,
              date: nil, dry_run: false, max_catchup_days: 7,
-             state_factory: nil, telegram_factory: nil, env: {})
-    config = Struct.new(:timezone, :repos, :line_stats?, :max_catchup_days).new("UTC", ["o/r"], false, max_catchup_days)
+             state_factory: nil, telegram_factory: nil, env: {},
+             delivery_state_path: "/tmp/prdigest-test-deliveries")
+    config = Struct.new(:timezone, :repos, :line_stats?, :max_catchup_days, :delivery_state_path)
+                   .new("UTC", ["o/r"], false, max_catchup_days, delivery_state_path)
     Prdigest::Runner.new(
       config: config, date: date, dry_run: dry_run, clock: FakeClock.new(self.date(10)),
       state_factory: state_factory || -> { state || FakeState.new(Prdigest::State::Record.new(nil, nil)) },

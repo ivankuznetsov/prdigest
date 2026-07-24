@@ -101,6 +101,10 @@ module Prdigest
       raw.dig("state", "path") || File.expand_path("~/.local/share/prdigest/state.json")
     end
 
+    def delivery_state_path
+      raw.dig("state", "delivery_path") || File.join(File.dirname(state_path), "deliveries")
+    end
+
     def schedule_cron
       raw.dig("schedule", "cron") || "5 9 * * *"
     end

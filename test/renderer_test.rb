@@ -52,6 +52,37 @@ class RendererTest < Minitest::Test
     assert_includes chunks.last, "<b>Total:</b>"
   end
 
+  def test_two_project_five_pr_digest_keeps_every_section_and_footer_once
+    repositories = %w[honeycomb/project hive/project]
+    pulls = [
+      pull(repositories[0], 35, "Escape _ * [ brackets ] <tags> & code `one` " * 4, "alice",
+           additions: 1, deletions: 1, commits: 1),
+      pull(repositories[0], 36, "Second linked change " * 8, "bob",
+           additions: 1, deletions: 1, commits: 1),
+      pull(repositories[1], 101, "First Hive change " * 8, "carol",
+           additions: 1, deletions: 1, commits: 1),
+      pull(repositories[1], 102, "Second Hive change " * 8, "dan",
+           additions: 1, deletions: 1, commits: 1),
+      pull(repositories[1], 103, "Final Hive change " * 8, "erin",
+           additions: 1, deletions: 1, commits: 1)
+    ]
+
+    chunks = renderer(limit: 520).render(
+      day(pulls, repositories: repositories, line_stats: true)
+    ).chunks
+
+    assert_operator chunks.length, :>, 1
+    chunks.each do |chunk|
+      assert_operator Prdigest::Renderer.parsed_length(chunk), :<=, 520
+      assert_supported_html_is_balanced(chunk)
+    end
+    combined = chunks.join("\n")
+    assert_equal [35, 36, 101, 102, 103], combined.scan(/#(\d+)/).flatten.map(&:to_i)
+    repositories.each { |repository| assert_includes combined, repository }
+    assert_equal 1, combined.scan("<b>Total:</b> 5 PRs").length
+    assert_includes chunks.last, "<b>Total:</b> 5 PRs"
+  end
+
   def test_rejects_an_impossible_single_entry
     digest = day([pull("o/r", 1, "X" * 1_000, "dev")])
     assert_raises(Prdigest::RenderError) { renderer(limit: 100).render(digest) }
@@ -76,11 +107,24 @@ class RendererTest < Minitest::Test
     Prdigest::PullRequest.new(
       repository: repo, number: number, title: title,
       url: "https://github.com/#{CGI.escape(repo)}/pull/#{number}?q=\"&x=<tag>", author: author,
-      merged_at: Time.utc(2026, 1, 15, 10, number), additions: additions, deletions: deletions, commits: commits
+      merged_at: Time.utc(2026, 1, 15, 10, number % 60), additions: additions, deletions: deletions, commits: commits
     )
   end
 
   def fixture(name)
     File.read(File.join(__dir__, "fixtures", "renderer", name)).chomp
+  end
+
+  def assert_supported_html_is_balanced(chunk)
+    stack = []
+    chunk.scan(%r{</?(?:b|a)(?:\s+href="[^"]*")?>}).each do |tag|
+      name = tag[%r{\A</?([a-z]+)}, 1]
+      if tag.start_with?("</")
+        assert_equal name, stack.pop
+      else
+        stack << name
+      end
+    end
+    assert_empty stack
   end
 end
