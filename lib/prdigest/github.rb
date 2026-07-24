@@ -103,7 +103,7 @@ module Prdigest
 
     def map_item(item, repository, date, window)
       actual_repository = repository_name(item)
-      merged_at = Time.iso8601(field(field(item, :pull_request), :merged_at).to_s).utc
+      merged_at = parse_time(field(field(item, :pull_request), :merged_at))
       unless actual_repository.casecmp?(repository) && window.cover?(merged_at)
         fail_fetch!(repository, date, "result outside requested repository or UTC window")
       end
@@ -116,6 +116,12 @@ module Prdigest
         author: field(field(item, :user), :login),
         merged_at: merged_at
       )
+    end
+
+    def parse_time(value)
+      return value.utc if value.is_a?(Time)
+
+      Time.iso8601(value.to_s).utc
     end
 
     def repository_name(item)

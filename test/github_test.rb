@@ -66,6 +66,17 @@ class GithubTest < Minitest::Test
     assert_equal 0, digest.total_prs
   end
 
+  def test_accepts_octokit_time_values_for_merged_at
+    merged_at = Time.iso8601("2026-01-15T01:00:00Z")
+    response = Response.new(total_count: 1, incomplete_results: false, items: [item(1, merged_at)])
+
+    digest = github(FakeClient.new(search_responses: [response])).fetch(
+      date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+    )
+
+    assert_equal merged_at, digest.repositories.first.pull_requests.first.merged_at
+  end
+
   def test_rejects_incomplete_over_cap_wrong_repo_and_outside_window
     invalid = [
       Response.new(total_count: 1, incomplete_results: true, items: []),
