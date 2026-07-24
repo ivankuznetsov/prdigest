@@ -5,13 +5,14 @@ require "date"
 module Prdigest
   class Runner
     def initialize(config:, date: nil, dry_run: false, clock: nil, state_factory: nil,
-                   github: nil, renderer: nil, telegram_factory: nil, env: ENV)
+                   github: nil, renderer: nil, telegram_factory: nil, repositories: nil, env: ENV)
       @config = config
       @date = date && Date.iso8601(date.to_s)
       @dry_run = dry_run
       @clock = clock || Clock.new(timezone: config.timezone)
       @state_factory = state_factory || -> { State.new(path: config.state_path, timezone: config.timezone) }
       @env = env
+      @repositories = repositories || config.repos
       @github = github || GitHub.new(token: config.github_token(env))
       @renderer = renderer || Renderer.new(send_empty: config.send_empty?, empty_message: config.empty_message)
       @telegram_factory = telegram_factory || lambda {
@@ -59,12 +60,12 @@ module Prdigest
         failed_date = date
         window = @clock.window(date)
         digest = if window.zero_length?
-                   DayDigest.build(date: date, repository_order: @config.repos, pulls: [], line_stats: @config.line_stats?)
+                     DayDigest.build(date: date, repository_order: @repositories, pulls: [], line_stats: @config.line_stats?)
                  else
                    @github.fetch(
                      date: date,
                      window: window,
-                     repositories: @config.repos,
+                     repositories: @repositories,
                      line_stats: @config.line_stats?
                    )
                  end

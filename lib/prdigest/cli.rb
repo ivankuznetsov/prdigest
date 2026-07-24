@@ -38,13 +38,24 @@ module Prdigest
         end
 
         validate_date!(parsed[:date]) if parsed[:date]
+        repositories = if parsed[:repos].empty?
+                         nil
+                       else
+                         Config.normalize_repos(parsed[:repos], label: "--repo")
+                       end
         raise ConfigError, "GitHub token is missing" if config.github_token(env).empty?
         if !parsed[:dry_run] && config.telegram_token(env).empty?
           raise ConfigError, "Telegram bot token is missing"
         end
 
         factory = runner_factory || ->(**options) { Runner.new(**options) }
-        result = factory.call(config: config, date: parsed[:date], dry_run: parsed[:dry_run], env: env).call
+        result = factory.call(
+          config: config,
+          date: parsed[:date],
+          dry_run: parsed[:dry_run],
+          repositories: repositories,
+          env: env
+        ).call
         present(result, json: parsed[:json], out: out, err: err)
         result.exit_code
       rescue ParseError => e
@@ -74,7 +85,7 @@ module Prdigest
       private
 
       def parse(argv)
-        parsed = { command: nil, config: nil, date: nil, dry_run: false, json: false }
+        parsed = { command: nil, config: nil, date: nil, dry_run: false, json: false, repos: [] }
         args = Array(argv).dup
         until args.empty?
           argument = args.shift
@@ -85,16 +96,23 @@ module Prdigest
             parsed[:dry_run] = true
           when "--json"
             parsed[:json] = true
-          when "--config", "--date"
+          when "--config", "--date", "--repo"
             value = args.shift
             raise ParseError, "missing value for #{argument}" if value.nil? || value.start_with?("--")
-            parsed[argument.delete_prefix("--").tr("-", "_").to_sym] = value
+            if argument == "--repo"
+              parsed[:repos] << value
+            else
+              parsed[argument.delete_prefix("--").tr("-", "_").to_sym] = value
+            end
           when /\A--config=(.*)\z/
             raise ParseError, "missing value for --config" if Regexp.last_match(1).empty?
             parsed[:config] = Regexp.last_match(1)
           when /\A--date=(.*)\z/
             raise ParseError, "missing value for --date" if Regexp.last_match(1).empty?
             parsed[:date] = Regexp.last_match(1)
+          when /\A--repo=(.*)\z/
+            raise ParseError, "missing value for --repo" if Regexp.last_match(1).empty?
+            parsed[:repos] << Regexp.last_match(1)
           when /\A-/
             raise ParseError, "unknown option"
           else
@@ -142,7 +160,7 @@ module Prdigest
       end
 
       def print_help(out)
-        out.puts "Usage: prdigest run [--config PATH] [--date YYYY-MM-DD] [--dry-run] [--json]"
+        out.puts "Usage: prdigest run [--config PATH] [--date YYYY-MM-DD] [--repo owner/name] [--dry-run] [--json]"
         out.puts "       prdigest serve | version"
         0
       end

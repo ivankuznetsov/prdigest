@@ -8,6 +8,8 @@ module Prdigest
   class Config
     attr_reader :raw, :path
 
+    REPOSITORY_SEGMENT = /\A[A-Za-z0-9_.-]+\z/
+
     def self.resolve_path(explicit: nil, env: ENV, system_path: "/etc/prdigest/config.yml")
       return File.expand_path(explicit) if explicit && !explicit.to_s.empty?
 
@@ -32,6 +34,22 @@ module Prdigest
       raise ConfigError, "cannot load config: #{e.class}"
     end
 
+    def self.normalize_repos(values, label: "repository")
+      normalized = Array(values).map { |value| value.to_s.strip }
+      raise ConfigError, "#{label} must list at least one owner/name" if normalized.empty?
+
+      invalid = normalized.find do |repository|
+        parts = repository.split("/", -1)
+        parts.length != 2 ||
+          parts.any? { |part| part.empty? || %w[. ..].include?(part) || !part.match?(REPOSITORY_SEGMENT) }
+      end
+      raise ConfigError, "#{label} entry must be owner/name; got #{invalid.inspect}" if invalid
+
+      normalized.each_with_object({}) do |repository, unique|
+        unique[repository.downcase] ||= repository
+      end.values.freeze
+    end
+
     def initialize(raw, path: nil)
       @raw = raw
       @path = path
@@ -42,7 +60,7 @@ module Prdigest
     end
 
     def repos
-      Array(raw.dig("github", "repos")).map(&:to_s).map(&:strip).reject(&:empty?)
+      self.class.normalize_repos(raw.dig("github", "repos"), label: "github.repos")
     end
 
     def github_token(env = ENV)
@@ -102,12 +120,7 @@ module Prdigest
       unless (1..30).cover?(max_catchup_days)
         raise ConfigError, "schedule.max_catchup_days must be from 1 to 30"
       end
-      raise ConfigError, "github.repos must list at least one owner/name" if repos.empty?
-      repos.each do |repo|
-        next if repo.match?(%r{\A[^/\s]+/[^/\s]+\z})
-
-        raise ConfigError, "github.repos entry must be owner/name; got #{repo.inspect}"
-      end
+      repos
       raise ConfigError, "telegram.chat_id is required" if chat_id.nil?
       raise ConfigError, "telegram.chat_id_allowlist must not be empty" if chat_id_allowlist.empty?
       unless chat_id_allowlist.include?(chat_id)

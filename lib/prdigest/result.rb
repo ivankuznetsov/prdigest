@@ -2,6 +2,8 @@
 
 module Prdigest
   class Result
+    SCHEMA = "prdigest-result"
+    SCHEMA_VERSION = 1
     REQUIRED_FIELDS = %i[
       status mode requested_days settled_days skipped_days failed_date remaining_days error
     ].freeze
@@ -52,6 +54,8 @@ module Prdigest
 
     def to_h
       {
+        schema: SCHEMA,
+        schema_version: SCHEMA_VERSION,
         status: status,
         mode: mode,
         requested_days: serialize_dates(requested_days),

@@ -5,8 +5,10 @@ require_relative "test_helper"
 class ResultTest < Minitest::Test
   def test_envelope_always_contains_required_fields
     result = Prdigest::Result.new(status: "success", mode: "scheduled")
+    assert_equal "prdigest-result", result.to_h.fetch(:schema)
+    assert_equal 1, result.to_h.fetch(:schema_version)
     assert_equal %i[status mode requested_days settled_days skipped_days failed_date remaining_days error],
-                 result.to_h.keys.first(8)
+                 result.to_h.keys.drop(2).first(8)
     assert_equal 0, result.exit_code
   end
 

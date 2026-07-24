@@ -64,6 +64,53 @@ class CliTest < Minitest::Test
     assert_equal "dry_run", JSON.parse(out.string)["status"]
   end
 
+  def test_repeatable_repo_flags_override_config_for_embedding_callers
+    path = write_config
+    captured = nil
+    result = Prdigest::Result.new(
+      status: "dry_run",
+      mode: "explicit_date_replay",
+      requested_days: [Date.new(2026, 1, 1)],
+      chunks: ["preview"]
+    )
+    factory = lambda do |**options|
+      captured = options
+      Struct.new(:result) { def call = result }.new(result)
+    end
+
+    out = StringIO.new
+    code = Prdigest::CLI.invoke(
+      [
+        "run", "--config", path, "--date", "2026-01-01", "--dry-run", "--json",
+        "--repo", "Owner/One", "--repo=other/two", "--repo", "owner/one"
+      ],
+      out: out,
+      err: StringIO.new,
+      env: { "GITHUB_TOKEN" => "synthetic" },
+      runner_factory: factory
+    )
+
+    assert_equal 0, code
+    assert_equal ["Owner/One", "other/two"], captured.fetch(:repositories)
+    assert_equal "prdigest-result", JSON.parse(out.string).fetch("schema")
+  end
+
+  def test_repo_flags_reject_malformed_repository_names
+    path = write_config
+    out = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      ["run", "--config", path, "--dry-run", "--json", "--repo", "../escape"],
+      out: out,
+      err: StringIO.new,
+      env: { "GITHUB_TOKEN" => "synthetic" },
+      runner_factory: ->(**) { flunk "runner must not start" }
+    )
+
+    assert_equal 2, code
+    assert_equal "config", JSON.parse(out.string).dig("error", "kind")
+  end
+
   def test_real_send_requires_telegram_token_and_date_is_strict
     path = write_config
     env = { "GITHUB_TOKEN" => "synthetic" }
