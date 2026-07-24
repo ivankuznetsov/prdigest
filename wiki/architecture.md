@@ -9,6 +9,8 @@ Scheduled real runs read timezone-bound state, checkpoint an over-cap skipped
 prefix, and process retained dates oldest-first. For each date, the clock derives
 a half-open UTC window, GitHub pagination and optional details complete, rendering
 produces every valid HTML chunk, delivery finishes, and only then state advances.
+Search merge timestamps are normalized from either Octokit's runtime `Time`
+objects or fixture/API ISO-8601 strings before the repository/window check.
 Before the first request, a separate per-date delivery checkpoint durably stores
 the rendered payload, chat, repository scope, and next unsent chunk. Definite
 acceptance advances that checkpoint; bounded retry applies only to definite
