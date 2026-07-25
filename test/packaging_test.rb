@@ -6,7 +6,7 @@ class PackagingTest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
 
   def test_release_version_and_deterministic_gem_manifest
-    assert_equal "0.1.0", Prdigest::VERSION
+    assert_equal "0.1.1", Prdigest::VERSION
     spec = Gem::Specification.load(File.join(ROOT, "prdigest.gemspec"))
     %w[exe/prdigest README.md LICENSE CHANGELOG.md SECURITY.md lib/prdigest/runner.rb].each do |path|
       assert_includes spec.files, path

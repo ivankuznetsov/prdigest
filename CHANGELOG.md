@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 - 2026-07-25
+
+- Accept Octokit `Time` objects as well as ISO-8601 strings for pull-request
+  merge timestamps, fixing malformed-response failures against live GitHub data.
+
 ## 0.1.0 - 2026-07-16
 
 - Add timezone-correct daily windows, atomic versioned state, and capped catch-up.
