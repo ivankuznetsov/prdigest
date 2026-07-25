@@ -7,8 +7,9 @@
 - Concurrent scheduled invocations still have no global date-cursor lock and are
   unsupported. Per-date delivery is locked and checkpointed, so a competing
   sender cannot duplicate the same stored payload.
-- Ambiguous Telegram transport outcomes require operator reconciliation. PRDigest
-  deliberately does not guess whether Telegram accepted an in-flight chunk.
+- A stored in-flight Telegram attempt cannot prove whether Telegram accepted the
+  chunk. PRDigest parks it as ambiguous; reconciliation and any deliberate
+  checkpoint move/replay remain manual operator work.
 - Authenticated GitHub/Telegram smokes and the clean Ubuntu walkthrough require
   operator infrastructure and credentials. Their checklist is documented in the
   README; retain only redacted timestamp/status evidence when performed.

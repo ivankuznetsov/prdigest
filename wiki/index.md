@@ -1,6 +1,8 @@
 # PRDigest wiki
 
 - [Architecture](architecture.md)
+- [Interfaces](interfaces.md)
+- [State and delivery](state-and-delivery.md)
 - [Dependencies](dependencies.md)
 - [Decisions](decisions.md)
 - [Known gaps](gaps.md)

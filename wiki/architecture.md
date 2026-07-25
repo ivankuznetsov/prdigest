@@ -2,8 +2,9 @@
 
 PRDigest is a synchronous oneshot. `CLI` resolves configuration and secrets,
 then `Runner` coordinates pure time/schedule logic, atomic `State`, the `GitHub`
-client, `Renderer`, and allowlist-guarded `Telegram` delivery. Dependencies are
-injectable so the automated suite never contacts a real service.
+client, `Renderer`, `DeliveryCheckpointStore`, and allowlist-guarded `Telegram`
+delivery. Dependencies are injectable so the automated suite never contacts a
+real service.
 
 Scheduled real runs read timezone-bound state, checkpoint an over-cap skipped
 prefix, and process retained dates oldest-first. For each date, the clock derives
@@ -18,11 +19,15 @@ acceptance advances that checkpoint; bounded retry applies only to definite
 checkpoint and fail closed. A date-cursor failure after complete delivery can
 therefore be retried without sending accepted chunks again.
 
-Explicit replay and dry-run bypass state. Dry-run also bypasses Telegram. Empty
-days either send the configured escaped message or settle through an explicit
-suppression outcome. The systemd oneshot is the date-scheduling concurrency
-boundary. A nonblocking per-date delivery lock additionally prevents two
-processes from sending the same checkpoint. The repeatable CLI
-`--repo owner/name` override is the embedding boundary for an external project
-registry such as Hive; PRDigest remains the only fetch, render, chunk, and
-delivery engine.
+Explicit replay bypasses the date cursor but uses the same per-date delivery
+checkpoint as a scheduled send. Dry-run bypasses the cursor, delivery
+checkpoint, and Telegram. Empty days either send the configured escaped message
+or settle through an explicit suppression outcome. The systemd oneshot is the
+date-scheduling concurrency boundary. A nonblocking per-date delivery lock
+additionally prevents two processes from sending the same checkpoint.
+
+The repeatable CLI `--repo owner/name` override is the embedding boundary for an
+external project registry such as Hive; PRDigest remains the only fetch, render,
+chunk, and delivery engine. See [Interfaces](interfaces.md) for the command and
+result envelope and [State and delivery](state-and-delivery.md) for both durable
+stores.
