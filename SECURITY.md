@@ -24,5 +24,5 @@ state files, or unredacted journal output.
 
 ## Supported release
 
-Security fixes target the latest published release. v0.1.0 is prepared here but
-is not published, tagged, or released by the build process.
+Security fixes target the latest published release. The build and test process
+does not tag or publish releases automatically.

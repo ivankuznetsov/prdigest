@@ -2,7 +2,7 @@
 
 - GitHub publishes no search-index freshness SLA. The 09:05 host-local timer and
   explicit replay reduce the risk but cannot prove a merge was indexed on time.
-- GitHub search's 1,000-result ceiling is a hard v0.1.0 operating limit; PRDigest
+- GitHub search's 1,000-result ceiling is a hard v0.1.x operating limit; PRDigest
   refuses incomplete/over-cap days instead of truncating.
 - Concurrent scheduled invocations still have no global date-cursor lock and are
   unsupported. Per-date delivery is locked and checkpointed, so a competing

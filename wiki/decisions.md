@@ -11,5 +11,5 @@
   messages on retry rather than silently lose a day.
 - Stable result data is separate from presentation; the CLI maps it to human/JSON
   output and public exit codes.
-- systemd remains the only scheduler for v0.1.0; `serve` is a compatibility stub.
+- systemd remains the only scheduler for v0.1.x; `serve` is a compatibility stub.
 - Release preparation is reversible and never tags, publishes, or creates a release.

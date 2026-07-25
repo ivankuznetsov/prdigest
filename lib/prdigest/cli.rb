@@ -33,7 +33,7 @@ module Prdigest
         path = Config.resolve_path(explicit: parsed[:config], env: env, system_path: system_path)
         config = Config.load(path)
         if parsed[:command] == "serve"
-          err.puts "prdigest serve: deferred in v0.1.0 — use systemd timer + `prdigest run`"
+          err.puts "prdigest serve: deferred in v0.1.x — use systemd timer + `prdigest run`"
           return 0
         end
 

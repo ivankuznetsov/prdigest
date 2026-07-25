@@ -23,7 +23,7 @@ To build and install the prepared gem without publishing it:
 
 ```sh
 gem build prdigest.gemspec
-gem install prdigest-0.1.0.gem
+gem install prdigest-0.1.1.gem
 prdigest version
 ```
 
@@ -57,7 +57,7 @@ state:
 
 Repository order controls digest order. `max_catchup_days` must be `1..30`.
 `chat_id` must appear in the non-empty allowlist; extra allowlisted IDs are
-accepted for schema compatibility but v0.1.0 sends only to `chat_id`. Token
+accepted for schema compatibility but v0.1.x sends only to `chat_id`. Token
 values belong in environment variables, never YAML.
 
 ## Commands and results
@@ -181,13 +181,13 @@ The Alpine image includes `tzdata` and runs as the unprivileged `prdigest` user.
 Initialize mounted ownership with the image before normal use:
 
 ```sh
-docker build -t prdigest:0.1.0 .
+docker build -t prdigest:0.1.1 .
 docker volume create prdigest-state
-docker run --rm --user root --entrypoint sh -v prdigest-state:/var/lib/prdigest prdigest:0.1.0 \
+docker run --rm --user root --entrypoint sh -v prdigest-state:/var/lib/prdigest prdigest:0.1.1 \
   -c 'chown -R prdigest:prdigest /var/lib/prdigest && chmod 0700 /var/lib/prdigest'
 docker run --rm --env-file /etc/prdigest/.env \
   -v /etc/prdigest/config.yml:/etc/prdigest/config.yml:ro \
-  -v prdigest-state:/var/lib/prdigest prdigest:0.1.0
+  -v prdigest-state:/var/lib/prdigest prdigest:0.1.1
 ```
 
 ## Verification and troubleshooting
@@ -215,11 +215,11 @@ See [SECURITY.md](SECURITY.md) for token scope, rotation, and private-data flow.
 
 ## Non-goals
 
-v0.1.0 has no built-in Hive configuration discovery, LLM content, web UI,
+v0.1.x has no built-in Hive configuration discovery, LLM content, web UI,
 interactive bot commands,
 multi-chat routing, organization discovery, non-GitHub forge support, or
-long-running scheduler. This repository prepares v0.1.0 without tagging,
-publishing the gem, or creating a release.
+long-running scheduler. The build and test process never tags or publishes
+automatically.
 
 ## License
 
