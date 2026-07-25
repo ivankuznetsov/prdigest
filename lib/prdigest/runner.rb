@@ -13,7 +13,12 @@ module Prdigest
       @state_factory = state_factory || -> { State.new(path: config.state_path, timezone: config.timezone) }
       @env = env
       @repositories = repositories || config.repos
-      @github = github || GitHub.new(token: config.github_token(env))
+      @collector = Collector.new(
+        clock: @clock,
+        github: github || GitHub.new(token: config.github_token(env)),
+        repositories: @repositories,
+        line_stats: config.line_stats?
+      )
       @renderer = renderer || Renderer.new(send_empty: config.send_empty?, empty_message: config.empty_message)
       @delivery_checkpoint_store_factory = lambda {
         DeliveryCheckpointStore.new(root: config.delivery_state_path)
@@ -62,17 +67,7 @@ module Prdigest
       telegram = nil
       requested.each do |date|
         failed_date = date
-        window = @clock.window(date)
-        digest = if window.zero_length?
-                     DayDigest.build(date: date, repository_order: @repositories, pulls: [], line_stats: @config.line_stats?)
-                 else
-                   @github.fetch(
-                     date: date,
-                     window: window,
-                     repositories: @repositories,
-                     line_stats: @config.line_stats?
-                   )
-                 end
+        digest = @collector.call(date: date)
         rendered = @renderer.render(digest)
         if @dry_run
           chunks.concat(rendered.chunks)
