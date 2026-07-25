@@ -12,6 +12,9 @@ module Prdigest
     def run_cmd; end
     map "run" => :run_cmd
 
+    desc "facts", "Print deterministic merged-PR facts as JSON"
+    def facts; end
+
     desc "version", "Print version"
     def version; end
 
@@ -20,23 +23,27 @@ module Prdigest
 
     class << self
       def invoke(argv = ARGV, out: $stdout, err: $stderr, env: ENV,
-                 system_path: "/etc/prdigest/config.yml", runner_factory: nil)
+                 system_path: "/etc/prdigest/config.yml", runner_factory: nil,
+                 facts_runner_factory: nil)
         json_intent = Array(argv).any? { |arg| arg == "--json" || arg.start_with?("--json=") }
+        facts_intent = command_intent(argv) == "facts"
         parsed = parse(argv)
         return print_version(out) if parsed[:command] == "version"
+        raise ParseError, "--help is not valid for facts" if facts_intent && parsed[:command] == "help"
         return print_help(out) if %w[help --help -h].include?(parsed[:command])
 
-        unless %w[run serve].include?(parsed[:command])
+        unless %w[facts run serve].include?(parsed[:command])
           raise ParseError, "unknown command"
         end
 
         path = Config.resolve_path(explicit: parsed[:config], env: env, system_path: system_path)
-        config = Config.load(path)
+        config = Config.load(path, capability: parsed[:command] == "facts" ? :facts : :run)
         if parsed[:command] == "serve"
           err.puts "prdigest serve: deferred in v0.1.x — use systemd timer + `prdigest run`"
           return 0
         end
 
+        validate_facts_options!(parsed) if parsed[:command] == "facts"
         validate_date!(parsed[:date]) if parsed[:date]
         repositories = if parsed[:repos].empty?
                          nil
@@ -44,6 +51,19 @@ module Prdigest
                          Config.normalize_repos(parsed[:repos], label: "--repo")
                        end
         raise ConfigError, "GitHub token is missing" if config.github_token(env).empty?
+
+        if parsed[:command] == "facts"
+          factory = facts_runner_factory || ->(**options) { FactsRunner.new(**options) }
+          document = factory.call(
+            config: config,
+            date: parsed[:date],
+            repositories: repositories,
+            env: env
+          ).call
+          out.puts JSON.generate(document)
+          return 0
+        end
+
         if !parsed[:dry_run] && config.telegram_token(env).empty?
           raise ConfigError, "Telegram bot token is missing"
         end
@@ -59,14 +79,24 @@ module Prdigest
         present(result, json: parsed[:json], out: out, err: err)
         result.exit_code
       rescue ParseError => e
+        return present_facts_failure(out, "cli", e.message) if facts_intent
+
         result = Result.failure(mode: "scheduled", error_kind: "cli", message: e.message)
         present(result, json: json_intent, out: out, err: err)
         result.exit_code
       rescue ConfigError => e
+        return present_facts_failure(out, "config", e.message) if facts_intent
+
         result = Result.failure(mode: parsed && parsed[:date] ? "explicit_date_replay" : "scheduled", error_kind: "config", message: e.message)
         present(result, json: parsed ? parsed[:json] : json_intent, out: out, err: err)
         result.exit_code
       rescue StandardError => e
+        if facts_intent
+          kind = e.is_a?(FetchError) ? e.kind : "internal"
+          message = e.is_a?(FetchError) ? e.message : "unexpected facts failure (#{e.class})"
+          return present_facts_failure(out, kind, message)
+        end
+
         result = Result.failure(
           mode: parsed && parsed[:date] ? "explicit_date_replay" : "scheduled",
           error_kind: "internal",
@@ -83,6 +113,22 @@ module Prdigest
       end
 
       private
+
+      def command_intent(argv)
+        args = Array(argv).dup
+        until args.empty?
+          argument = args.shift
+          case argument
+          when "--config", "--date", "--repo"
+            args.shift
+          when /\A--/
+            next
+          else
+            return argument
+          end
+        end
+        nil
+      end
 
       def parse(argv)
         parsed = { command: nil, config: nil, date: nil, dry_run: false, json: false, repos: [] }
@@ -131,6 +177,16 @@ module Prdigest
         raise ConfigError, "date must use YYYY-MM-DD"
       end
 
+      def validate_facts_options!(parsed)
+        raise ParseError, "--dry-run is not valid for facts" if parsed[:dry_run]
+        raise ParseError, "--json is not valid for facts; output is always JSON" if parsed[:json]
+      end
+
+      def present_facts_failure(out, error_kind, message)
+        out.puts JSON.generate(Facts.failure(error_kind: error_kind, message: message))
+        Result::EXIT_CODES.fetch(error_kind.to_s, 1)
+      end
+
       def present(result, json:, out:, err:)
         if json
           out.puts JSON.generate(result.to_h)
@@ -161,6 +217,7 @@ module Prdigest
 
       def print_help(out)
         out.puts "Usage: prdigest run [--config PATH] [--date YYYY-MM-DD] [--repo owner/name] [--dry-run] [--json]"
+        out.puts "       prdigest facts [--config PATH] [--date YYYY-MM-DD] [--repo owner/name]"
         out.puts "       prdigest serve | version"
         0
       end

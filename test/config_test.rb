@@ -79,6 +79,53 @@ class ConfigTest < Minitest::Test
     end
   end
 
+  def test_facts_capability_does_not_require_telegram_configuration
+    path = write_config(
+      "timezone" => "Europe/London",
+      "schedule" => { "max_catchup_days" => 14 },
+      "github" => { "repos" => ["owner/repo"] }
+    )
+
+    config = Prdigest::Config.load(path, capability: :facts)
+
+    assert_equal "Europe/London", config.timezone
+    assert_equal 14, config.max_catchup_days
+    assert_equal ["owner/repo"], config.repos
+  end
+
+  def test_facts_capability_still_validates_timezone_schedule_and_repositories
+    configurations = [
+      {
+        "timezone" => "Mars/Olympus_Mons",
+        "github" => { "repos" => ["owner/repo"] }
+      },
+      {
+        "schedule" => { "max_catchup_days" => 31 },
+        "github" => { "repos" => ["owner/repo"] }
+      },
+      {
+        "github" => { "repos" => ["not-a-repository"] }
+      }
+    ]
+
+    configurations.each do |raw|
+      assert_raises(Prdigest::ConfigError) do
+        Prdigest::Config.load(write_config(raw), capability: :facts)
+      end
+    end
+  end
+
+  def test_default_load_capability_remains_telegram_strict
+    path = write_config(
+      "timezone" => "UTC",
+      "github" => { "repos" => ["owner/repo"] }
+    )
+
+    error = assert_raises(Prdigest::ConfigError) { Prdigest::Config.load(path) }
+
+    assert_equal "telegram.chat_id is required", error.message
+  end
+
   private
 
   def write_config(hash)

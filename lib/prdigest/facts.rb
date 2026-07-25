@@ -12,6 +12,19 @@ module Prdigest
       @timezone = timezone.to_s.freeze
     end
 
+    def self.failure(error_kind:, message:)
+      {
+        schema: SCHEMA,
+        schema_version: SCHEMA_VERSION,
+        status: "failure",
+        error: {
+          kind: error_kind.to_s,
+          message: message.to_s
+        },
+        digest: nil
+      }
+    end
+
     def to_h
       {
         schema: SCHEMA,

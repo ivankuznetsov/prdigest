@@ -7,13 +7,129 @@ require "yaml"
 
 class CliTest < Minitest::Test
   def test_exposes_thor_tasks_and_help_switches
-    %w[run_cmd serve version].each { |command| assert_includes Prdigest::CLI.tasks.keys, command }
+    %w[facts run_cmd serve version].each { |command| assert_includes Prdigest::CLI.tasks.keys, command }
     assert_equal :run_cmd, Prdigest::CLI.send(:map).fetch("run")
 
     [["help"], ["--help"], ["-h"]].each do |argv|
       out = StringIO.new
       assert_equal 0, Prdigest::CLI.invoke(argv, out: out, err: StringIO.new)
       assert_match(/Usage: prdigest run/, out.string)
+      assert_match(/prdigest facts/, out.string)
+    end
+  end
+
+  def test_facts_emits_one_json_document_with_explicit_scope_and_no_telegram_token
+    path = write_config(include_telegram: false)
+    captured = nil
+    document = {
+      schema: "prdigest-facts",
+      schema_version: 1,
+      status: "success",
+      error: nil,
+      digest: { date: "2026-01-15" }
+    }
+    factory = lambda do |**options|
+      captured = options
+      Struct.new(:document) { def call = document }.new(document)
+    end
+    out = StringIO.new
+    err = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      [
+        "facts", "--config", path, "--date", "2026-01-15",
+        "--repo", "Owner/One", "--repo=other/two", "--repo", "owner/one"
+      ],
+      out: out,
+      err: err,
+      env: { "GITHUB_TOKEN" => "synthetic" },
+      facts_runner_factory: factory
+    )
+
+    assert_equal 0, code
+    assert_equal JSON.parse(JSON.generate(document)), JSON.parse(out.string)
+    assert_equal 1, out.string.lines.length
+    assert_empty err.string
+    assert_equal "2026-01-15", captured.fetch(:date)
+    assert_equal ["Owner/One", "other/two"], captured.fetch(:repositories)
+    assert_equal "Europe/London", captured.fetch(:config).timezone
+  end
+
+  def test_facts_requires_only_the_github_token
+    path = write_config(include_telegram: false)
+    out = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      ["facts", "--config", path],
+      out: out,
+      err: StringIO.new,
+      env: {},
+      facts_runner_factory: ->(**) { flunk "facts runner must not start" }
+    )
+
+    assert_equal 2, code
+    assert_equal(
+      {
+        "schema" => "prdigest-facts",
+        "schema_version" => 1,
+        "status" => "failure",
+        "error" => { "kind" => "config", "message" => "GitHub token is missing" },
+        "digest" => nil
+      },
+      JSON.parse(out.string)
+    )
+  end
+
+  def test_facts_rejects_run_only_options_and_uses_its_json_failure_contract
+    path = write_config(include_telegram: false)
+
+    [["--dry-run"], ["--json"], ["--help"], ["--date", "2026-1-1"]].each do |arguments|
+      out = StringIO.new
+      code = Prdigest::CLI.invoke(
+        ["facts", "--config", path, *arguments],
+        out: out,
+        err: StringIO.new,
+        env: { "GITHUB_TOKEN" => "synthetic" },
+        facts_runner_factory: ->(**) { flunk "facts runner must not start" }
+      )
+
+      assert_equal 2, code
+      payload = JSON.parse(out.string)
+      assert_equal "prdigest-facts", payload.fetch("schema")
+      assert_equal "failure", payload.fetch("status")
+      assert_includes %w[cli config], payload.dig("error", "kind")
+    end
+  end
+
+  def test_facts_reports_fetch_and_internal_failures_without_partial_output
+    path = write_config(include_telegram: false)
+    failures = [
+      [Prdigest::FetchError.new("GitHub fetch failed safely", kind: "github"), 3, "github", "GitHub fetch failed safely"],
+      [RuntimeError.new("must not escape"), 1, "internal", "unexpected facts failure (RuntimeError)"]
+    ]
+
+    failures.each do |failure, expected_code, expected_kind, expected_message|
+      out = StringIO.new
+      err = StringIO.new
+      runner = Object.new
+      runner.define_singleton_method(:call) { raise failure }
+
+      code = Prdigest::CLI.invoke(
+        ["facts", "--config", path],
+        out: out,
+        err: err,
+        env: { "GITHUB_TOKEN" => "synthetic" },
+        facts_runner_factory: ->(**) { runner }
+      )
+
+      assert_equal expected_code, code
+      assert_equal 1, out.string.lines.length
+      assert_empty err.string
+      payload = JSON.parse(out.string)
+      assert_equal "failure", payload.fetch("status")
+      assert_equal expected_kind, payload.dig("error", "kind")
+      assert_equal expected_message, payload.dig("error", "message")
+      refute_includes out.string, "must not escape"
     end
   end
 
@@ -155,12 +271,14 @@ class CliTest < Minitest::Test
 
   private
 
-  def write_config
+  def write_config(include_telegram: true)
     path = File.join(Dir.mktmpdir, "config.yml")
-    File.write(path, YAML.dump(
-      "timezone" => "UTC", "github" => { "repos" => ["o/r"] },
-      "telegram" => { "chat_id" => 1, "chat_id_allowlist" => [1] }
-    ))
+    raw = {
+      "timezone" => include_telegram ? "UTC" : "Europe/London",
+      "github" => { "repos" => ["o/r"] }
+    }
+    raw["telegram"] = { "chat_id" => 1, "chat_id_allowlist" => [1] } if include_telegram
+    File.write(path, YAML.dump(raw))
     path
   end
 end

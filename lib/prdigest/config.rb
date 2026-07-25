@@ -20,14 +20,14 @@ module Prdigest
       raise ConfigError, "config path is required (--config, PRDIGEST_CONFIG, or /etc/prdigest/config.yml)"
     end
 
-    def self.load(path)
+    def self.load(path, capability: :run)
       path = File.expand_path(path)
       raise ConfigError, "config not found: #{path}" unless File.file?(path)
 
       raw = YAML.safe_load_file(path, aliases: true)
       raise ConfigError, "config root must be a mapping" unless raw.is_a?(Hash)
 
-      new(raw, path: path).tap(&:validate!)
+      new(raw, path: path).tap { |config| config.validate!(capability: capability) }
     rescue ConfigError
       raise
     rescue StandardError => e
@@ -115,7 +115,12 @@ module Prdigest
       raise ConfigError, "schedule.max_catchup_days must be an integer from 1 to 30"
     end
 
-    def validate!
+    def validate!(capability: :run)
+      capability = capability.to_sym
+      unless %i[facts run].include?(capability)
+        raise ArgumentError, "unknown configuration capability: #{capability}"
+      end
+
       begin
         TZInfo::Timezone.get(timezone)
       rescue TZInfo::InvalidTimezoneIdentifier
@@ -125,6 +130,8 @@ module Prdigest
         raise ConfigError, "schedule.max_catchup_days must be from 1 to 30"
       end
       repos
+      return self if capability == :facts
+
       raise ConfigError, "telegram.chat_id is required" if chat_id.nil?
       raise ConfigError, "telegram.chat_id_allowlist must not be empty" if chat_id_allowlist.empty?
       unless chat_id_allowlist.include?(chat_id)
