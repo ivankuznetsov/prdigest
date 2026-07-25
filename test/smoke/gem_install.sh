@@ -4,6 +4,9 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+ruby_bin=$(command -v ruby)
+ruby_dir=$(dirname -- "$ruby_bin")
+smoke_path="$tmp/bin:$ruby_dir:/usr/bin:/bin"
 
 run_and_show() {
   output=$1
@@ -37,14 +40,14 @@ cp "$root/configs/config.example.yml" "$tmp/config/config.yml"
 cd "$tmp"
 
 run_and_show "$tmp/version.out" env -i \
-  HOME="$tmp/home" PATH="$tmp/bin:/usr/bin:/bin" \
+  HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" RUBYOPT= RUBYLIB= \
   prdigest version
 grep -Fq "prdigest 0.1.1" "$tmp/version.out"
 
-env -i HOME="$tmp/home" PATH="$tmp/bin:/usr/bin:/bin" \
+env -i HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" RUBYOPT= RUBYLIB= \
-  ruby -rprdigest -e '
+  "$ruby_bin" -rprdigest -e '
     feature = $LOADED_FEATURES.find { |path| path.end_with?("/prdigest.rb") }
     gem_root = "#{File.realpath(ENV.fetch("GEM_HOME"))}#{File::SEPARATOR}"
     abort "prdigest loaded outside isolated GEM_HOME: #{feature}" unless
@@ -52,7 +55,7 @@ env -i HOME="$tmp/home" PATH="$tmp/bin:/usr/bin:/bin" \
   '
 
 run_and_show "$tmp/result.json" env -i \
-  HOME="$tmp/home" PATH="$tmp/bin:/usr/bin:/bin" \
+  HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" \
   GITHUB_TOKEN=synthetic-smoke-token \
   RUBYOPT="-r$root/test/support/offline_smoke_stubs.rb" RUBYLIB= \
