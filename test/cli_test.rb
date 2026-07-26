@@ -7,28 +7,30 @@ require "yaml"
 
 class CliTest < Minitest::Test
   def test_exposes_thor_tasks_and_help_switches
-    %w[facts prose run_cmd serve version].each { |command| assert_includes Prdigest::CLI.tasks.keys, command }
-    assert_equal :run_cmd, Prdigest::CLI.send(:map).fetch("run")
+    assert_equal %w[facts prose version], Prdigest::CLI.tasks.keys.sort
+    refute_includes Prdigest::CLI.send(:map), "run"
 
     [["help"], ["--help"], ["-h"]].each do |argv|
       out = StringIO.new
       assert_equal 0, Prdigest::CLI.invoke(argv, out: out, err: StringIO.new)
-      assert_match(/Usage: prdigest run/, out.string)
       assert_match(/prdigest facts/, out.string)
       assert_match(/prdigest prose/, out.string)
+      refute_match(/prdigest run/, out.string)
+      refute_match(/prdigest serve/, out.string)
     end
   end
 
-  def test_serve_stub_uses_version_independent_scheduler_guidance
-    path = write_config
-    out = StringIO.new
-    err = StringIO.new
+  def test_removed_delivery_commands_are_unknown
+    %w[run serve].each do |command|
+      out = StringIO.new
+      err = StringIO.new
 
-    code = Prdigest::CLI.invoke(["serve", "--config", path], out: out, err: err)
+      code = Prdigest::CLI.invoke([command], out: out, err: err)
 
-    assert_equal 0, code
-    assert_empty out.string
-    assert_equal "prdigest serve: not implemented — use systemd timer + `prdigest run`\n", err.string
+      assert_equal 2, code
+      assert_empty out.string
+      assert_equal "prdigest: cli: unknown command\n", err.string
+    end
   end
 
   def test_prose_stdout_emits_exact_raw_text_with_one_terminal_newline
@@ -151,17 +153,6 @@ class CliTest < Minitest::Test
       assert_empty out.string
       assert_includes err.string, "#{option} is not valid for prose"
     end
-
-    out = StringIO.new
-    code = Prdigest::CLI.invoke(
-      ["run", "--config", path, "--deliver", "--json"],
-      out: out,
-      err: StringIO.new,
-      env: credentials,
-      runner_factory: ->(**) { flunk "runner must not start" }
-    )
-    assert_equal 2, code
-    assert_equal "cli", JSON.parse(out.string).dig("error", "kind")
 
     facts_out = StringIO.new
     code = Prdigest::CLI.invoke(
@@ -352,125 +343,13 @@ class CliTest < Minitest::Test
     end
   end
 
-  def test_unknown_command_json_is_one_complete_refusal
+  def test_unknown_command_is_a_cli_refusal
     out = StringIO.new
     err = StringIO.new
     code = Prdigest::CLI.invoke(["wat", "--json"], out: out, err: err)
     assert_equal 2, code
-    payload = JSON.parse(out.string)
-    assert_equal "failure", payload["status"]
-    assert_equal "cli", payload.dig("error", "kind")
-    assert_empty err.string
-  end
-
-  def test_dry_run_requires_github_but_not_telegram_token
-    path = write_config
-    out = StringIO.new
-    code = Prdigest::CLI.invoke(
-      ["run", "--config", path, "--dry-run", "--json"], out: out, err: StringIO.new,
-      env: {}, runner_factory: ->(**) { flunk "runner must not start" }
-    )
-    assert_equal 2, code
-    assert_equal "config", JSON.parse(out.string).dig("error", "kind")
-
-    result = Prdigest::Result.new(status: "dry_run", mode: "scheduled", requested_days: [Date.new(2026, 1, 1)], chunks: ["preview"])
-    factory = ->(**) { Struct.new(:result) { def call = result }.new(result) }
-    out = StringIO.new
-    code = Prdigest::CLI.invoke(
-      ["run", "--config=#{path}", "--dry-run", "--json"], out: out, err: StringIO.new,
-      env: { "GITHUB_TOKEN" => "synthetic" }, runner_factory: factory
-    )
-    assert_equal 0, code
-    assert_equal "dry_run", JSON.parse(out.string)["status"]
-  end
-
-  def test_repeatable_repo_flags_override_config_for_embedding_callers
-    path = write_config
-    captured = nil
-    result = Prdigest::Result.new(
-      status: "dry_run",
-      mode: "explicit_date_replay",
-      requested_days: [Date.new(2026, 1, 1)],
-      chunks: ["preview"]
-    )
-    factory = lambda do |**options|
-      captured = options
-      Struct.new(:result) { def call = result }.new(result)
-    end
-
-    out = StringIO.new
-    code = Prdigest::CLI.invoke(
-      [
-        "run", "--config", path, "--date", "2026-01-01", "--dry-run", "--json",
-        "--repo", "Owner/One", "--repo=other/two", "--repo", "owner/one"
-      ],
-      out: out,
-      err: StringIO.new,
-      env: { "GITHUB_TOKEN" => "synthetic" },
-      runner_factory: factory
-    )
-
-    assert_equal 0, code
-    assert_equal ["Owner/One", "other/two"], captured.fetch(:repositories)
-    assert_equal "prdigest-result", JSON.parse(out.string).fetch("schema")
-  end
-
-  def test_repo_flags_reject_malformed_repository_names
-    path = write_config
-    out = StringIO.new
-
-    code = Prdigest::CLI.invoke(
-      ["run", "--config", path, "--dry-run", "--json", "--repo", "../escape"],
-      out: out,
-      err: StringIO.new,
-      env: { "GITHUB_TOKEN" => "synthetic" },
-      runner_factory: ->(**) { flunk "runner must not start" }
-    )
-
-    assert_equal 2, code
-    assert_equal "config", JSON.parse(out.string).dig("error", "kind")
-  end
-
-  def test_real_send_requires_telegram_token_and_date_is_strict
-    path = write_config
-    env = { "GITHUB_TOKEN" => "synthetic" }
-    [["run", "--config", path, "--json"], ["run", "--config", path, "--date", "2026-1-1", "--json"]].each do |argv|
-      out = StringIO.new
-      assert_equal 2, Prdigest::CLI.invoke(argv, out: out, err: StringIO.new, env: env)
-      assert_equal "config", JSON.parse(out.string).dig("error", "kind")
-    end
-  end
-
-  def test_human_failure_reports_progress_and_error
-    path = write_config
-    result = Prdigest::Result.failure(
-      mode: "scheduled",
-      error_kind: "github",
-      message: "synthetic failure",
-      requested_days: [Date.new(2026, 1, 1), Date.new(2026, 1, 2), Date.new(2026, 1, 3)],
-      settled_days: [Date.new(2026, 1, 1)],
-      skipped_days: [Date.new(2025, 12, 31)],
-      failed_date: Date.new(2026, 1, 2),
-      remaining_days: [Date.new(2026, 1, 2), Date.new(2026, 1, 3)]
-    )
-    factory = ->(**) { Struct.new(:result) { def call = result }.new(result) }
-    out = StringIO.new
-    err = StringIO.new
-
-    code = Prdigest::CLI.invoke(
-      ["run", "--config", path],
-      out: out,
-      err: err,
-      env: { "GITHUB_TOKEN" => "synthetic", "TELEGRAM_BOT_TOKEN" => "synthetic" },
-      runner_factory: factory
-    )
-
-    assert_equal 6, code
     assert_empty out.string
-    assert_includes err.string, "settled=2026-01-01"
-    assert_includes err.string, "skipped=2025-12-31"
-    assert_includes err.string, "remaining=2026-01-02,2026-01-03"
-    assert_includes err.string, "github: synthetic failure"
+    assert_equal "prdigest: cli: unknown command\n", err.string
   end
 
   private

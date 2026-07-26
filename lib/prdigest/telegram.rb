@@ -109,7 +109,6 @@ module Prdigest
       request.body = JSON.generate(
         chat_id: @chat_id,
         text: text,
-        parse_mode: "HTML",
         link_preview_options: { is_disabled: true }
       )
       request

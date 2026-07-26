@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require "cgi"
-
 module Prdigest
   class ProseRenderer
+    Output = Data.define(:chunks, :outcome)
     DISALLOWED_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/
 
     def initialize(limit: 4_096)
@@ -23,10 +22,8 @@ module Prdigest
         )
       end
 
-      chunks = text.each_char.each_slice(@limit).map do |characters|
-        CGI.escapeHTML(characters.join).freeze
-      end
-      Renderer::Output.new(chunks.freeze, "rendered")
+      chunks = text.each_char.each_slice(@limit).map { |characters| characters.join.freeze }
+      Output.new(chunks.freeze, "rendered")
     rescue RenderError
       raise
     rescue StandardError => e

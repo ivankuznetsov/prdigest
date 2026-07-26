@@ -7,7 +7,7 @@ uses Ruby's `Net::HTTP` with peer verification and no redirect handling.
 Optional standalone prose also uses `Net::HTTP`, targeting the common
 OpenAI-compatible `/chat/completions` contract with a bearer key named by
 configuration. It adds no provider SDK dependency and is never constructed by
-`run` or `facts`.
+`facts`.
 
 The OpenClaw integration is a text-only `SKILL.md` bundle owned by this
 repository. ClawHub distributes that bundle separately from RubyGems; the bundle

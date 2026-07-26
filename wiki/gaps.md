@@ -8,9 +8,9 @@
   explicit replay reduce the risk but cannot prove a merge was indexed on time.
 - GitHub search's 1,000-result ceiling is a hard operating limit; PRDigest
   refuses incomplete/over-cap days instead of truncating.
-- Concurrent scheduled invocations still have no global date-cursor lock and are
-  unsupported. Per-date delivery is locked and checkpointed, so a competing
-  sender cannot duplicate the same stored payload.
+- The daily prose timer has no multi-day catch-up cursor. systemd can trigger one
+  missed activation, but operators must invoke older missed dates explicitly.
+  Per-date delivery remains locked and checkpointed.
 - Ambiguous Telegram transport outcomes require operator reconciliation. PRDigest
   deliberately does not guess whether Telegram accepted an in-flight chunk.
 - Authenticated GitHub/Telegram smokes and the clean Ubuntu walkthrough require

@@ -28,7 +28,7 @@ module Prdigest
       raise ConfigError, "config path is required (--config, PRDIGEST_CONFIG, or /etc/prdigest/config.yml)"
     end
 
-    def self.load(path, capability: :run)
+    def self.load(path, capability: :facts)
       path = File.expand_path(path)
       raise ConfigError, "config not found: #{path}" unless File.file?(path)
 
@@ -143,35 +143,13 @@ module Prdigest
       raw.dig("digest", "line_stats") != false
     end
 
-    def send_empty?
-      raw.dig("digest", "send_empty") != false
-    end
-
-    def empty_message
-      raw.dig("digest", "empty_message") || "Merged PR digest — {date}\nTotal: 0 PRs"
-    end
-
-    def state_path
-      raw.dig("state", "path") || File.expand_path("~/.local/share/prdigest/state.json")
-    end
-
     def delivery_state_path
-      raw.dig("state", "delivery_path") || File.join(File.dirname(state_path), "deliveries")
+      raw.dig("state", "delivery_path") || File.expand_path("~/.local/share/prdigest/deliveries")
     end
 
-    def schedule_cron
-      raw.dig("schedule", "cron") || "5 9 * * *"
-    end
-
-    def max_catchup_days
-      Integer(raw.dig("schedule", "max_catchup_days") || 7)
-    rescue TypeError, ArgumentError
-      raise ConfigError, "schedule.max_catchup_days must be an integer from 1 to 30"
-    end
-
-    def validate!(capability: :run)
+    def validate!(capability: :facts)
       capability = capability.to_sym
-      unless %i[facts run prose prose_delivery].include?(capability)
+      unless %i[facts prose prose_delivery].include?(capability)
         raise ArgumentError, "unknown configuration capability: #{capability}"
       end
 
@@ -179,9 +157,6 @@ module Prdigest
         TZInfo::Timezone.get(timezone)
       rescue TZInfo::InvalidTimezoneIdentifier
         raise ConfigError, "timezone must be a resolvable IANA identifier"
-      end
-      unless (1..30).cover?(max_catchup_days)
-        raise ConfigError, "schedule.max_catchup_days must be from 1 to 30"
       end
       repos
       return self if capability == :facts

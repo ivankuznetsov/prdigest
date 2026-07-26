@@ -40,7 +40,7 @@ Omit `--date` when the user wants PRDigest's default of yesterday in its
 configured timezone. Omit `--repo` arguments to use the configured repository
 order. Preserve every explicit repository as its own quoted `--repo` argument.
 
-Do not invoke `prdigest run` or `prdigest prose`. Make no second GitHub query.
+Do not invoke any other `prdigest` command. Make no second GitHub query.
 Do not call GitHub directly. Do not send to Telegram. Do not use an AI provider.
 Do not use another data source as a fallback.
 

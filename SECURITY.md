@@ -35,8 +35,8 @@ and model boundary so OpenClaw can write prose. Standalone `prdigest prose`
 sends the same complete document plus the configured model name to the
 OpenAI-compatible endpoint. Private repositories therefore require an OpenClaw
 deployment or provider whose data handling, retention, and access controls are
-acceptable to the operator. Neither mode is ambient: `prdigest run` and
-`prdigest facts` never contact the standalone prose provider.
+acceptable to the operator. Provider access is never ambient: `prdigest facts`
+does not contact the standalone prose provider.
 
 Pull-request fields are untrusted input. The built-in provider prompt and the
 OpenClaw skill explicitly classify the facts JSON as data, never instructions,
@@ -45,9 +45,8 @@ processing private repository content. The OpenClaw skill must not make a second
 GitHub query, deliver messages, install software silently, or print credentials.
 
 Prose Telegram checkpoints contain generated text derived from repository facts.
-They use the same secret-free mode-`0600` files and mode-`0700` directories as
-deterministic delivery, under a separate `prose` namespace. Protect, retain, and
-delete them as private repository metadata.
+They use secret-free mode-`0600` files inside mode-`0700` directories. Protect,
+retain, and delete them as private repository metadata.
 
 ## Reporting
 

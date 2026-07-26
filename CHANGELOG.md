@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Remove `prdigest run`, deterministic Telegram HTML, schedule/cursor state,
+  catch-up processing, the `prdigest-result` envelope, and the `serve` stub.
+- Keep `prdigest facts` for agents and `prdigest prose` for stdout or
+  checkpointed plain-text Telegram delivery.
+- Make `prdigest prose --deliver` the systemd and container default.
+
 ## 0.2.0 - 2026-07-26
 
 - Add a deterministic `prdigest facts` JSON contract over the canonical

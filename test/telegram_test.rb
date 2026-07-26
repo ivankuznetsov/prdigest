@@ -47,7 +47,7 @@ class TelegramTest < Minitest::Test
     payload = JSON.parse(call[:request].body)
     assert_equal(-1001, payload["chat_id"])
     assert_equal "<b>Hello</b>", payload["text"]
-    assert_equal "HTML", payload["parse_mode"]
+    refute payload.key?("parse_mode")
     assert_equal true, payload["link_preview_options"]["is_disabled"]
     assert_equal [10, 30, 30], call[:timeouts]
   end

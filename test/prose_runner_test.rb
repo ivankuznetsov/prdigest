@@ -72,7 +72,7 @@ class ProseRunnerTest < Minitest::Test
 
     def render(value)
       @values << value
-      Prdigest::Renderer::Output.new(@chunks, "rendered")
+      Prdigest::ProseRenderer::Output.new(@chunks, "rendered")
     end
   end
 
@@ -253,33 +253,6 @@ class ProseRunnerTest < Minitest::Test
         assert_empty telegram.network_sends
         refute File.exist?(File.join(root, "prose", "#{DATE}.json"))
       end
-    end
-  end
-
-  def test_prose_checkpoint_namespace_is_separate_from_deterministic_delivery
-    Dir.mktmpdir do |root|
-      deterministic = Prdigest::DeliveryCheckpointStore.new(root: root)
-      deterministic.with_checkpoint(
-        date: DATE,
-        chat_id: 1,
-        scope: ["owner/repo"],
-        chunks: ["deterministic"]
-      ) { }
-      telegram = CheckpointingTelegram.new
-
-      runner(
-        config: config(delivery_path: root),
-        deliver: true,
-        env: credentials,
-        github: FakeGitHub.new,
-        generator: FakeGenerator.new,
-        renderer: FakeRenderer.new(chunks: ["generated prose"]),
-        telegram_factory: -> { telegram }
-      ).call
-
-      assert_equal ["generated prose"], telegram.network_sends
-      assert_equal ["deterministic"], checkpoint_chunks(File.join(root, "#{DATE}.json"))
-      assert_equal ["generated prose"], checkpoint_chunks(File.join(root, "prose", "#{DATE}.json"))
     end
   end
 

@@ -31,8 +31,7 @@ fi
 test "$status" -eq 7
 grep -Fq 'run-and-show-failure-sentinel' "$smoke_result"
 
-sed -e 's/line_stats: true/line_stats: false/' -e 's/send_empty: true/send_empty: false/' \
-  "$root/configs/config.example.yml" > "$smoke_config"
+sed 's/line_stats: true/line_stats: false/' "$root/configs/config.example.yml" > "$smoke_config"
 chmod 0644 "$smoke_config"
 
 docker build -t "$tag" "$root"
@@ -50,28 +49,30 @@ run_and_show "$smoke_result" docker run --rm \
   -v "$smoke_config:/etc/prdigest/config.yml:ro" \
   -v "$root/test/support/offline_smoke_stubs.rb:/opt/prdigest/offline_smoke_stubs.rb:ro" \
   -v "$volume:/var/lib/prdigest" \
-  "$tag" run --config /etc/prdigest/config.yml --date 2026-01-15 --dry-run --json
+  "$tag" facts --config /etc/prdigest/config.yml --date 2026-01-15
 
-grep -Fq '"status":"dry_run"' "$smoke_result"
+grep -Fq '"schema":"prdigest-facts"' "$smoke_result"
+grep -Fq '"status":"success"' "$smoke_result"
 grep -Fq 'Synthetic packaged Time result' "$smoke_result"
 
 docker run --rm --entrypoint sh -v "$volume:/var/lib/prdigest" "$tag" -c \
-  'test ! -e /var/lib/prdigest/state.json &&
-   test ! -e /var/lib/prdigest/deliveries'
+  'test ! -e /var/lib/prdigest/deliveries'
 
 run_and_show "$smoke_result" docker run --rm \
   -e GITHUB_TOKEN=synthetic-smoke-token \
   -e TELEGRAM_BOT_TOKEN=synthetic-smoke-token \
-  -e PRDIGEST_SMOKE_EMPTY=1 \
+  -e OPENROUTER_API_KEY=synthetic-provider-token \
+  -e PRDIGEST_SMOKE_PROSE=1 \
   -e RUBYOPT=-r/opt/prdigest/offline_smoke_stubs.rb \
   -v "$smoke_config:/etc/prdigest/config.yml:ro" \
   -v "$root/test/support/offline_smoke_stubs.rb:/opt/prdigest/offline_smoke_stubs.rb:ro" \
   -v "$volume:/var/lib/prdigest" \
-  "$tag" run --config /etc/prdigest/config.yml --json
+  "$tag"
 
-grep -Fq '"status":"success"' "$smoke_result"
+grep -Fq 'prdigest: prose delivered;' "$smoke_result"
 
 docker run --rm --entrypoint sh -v "$volume:/var/lib/prdigest" "$tag" -c \
-  'test -f /var/lib/prdigest/state.json &&
-   test "$(stat -c %a /var/lib/prdigest/state.json)" = 600 &&
-   test "$(stat -c %u /var/lib/prdigest/state.json)" = "$(id -u)"'
+  'checkpoint=$(find /var/lib/prdigest/deliveries/prose -name "*.json" -type f | head -n 1)
+   test -n "$checkpoint" &&
+   test "$(stat -c %a "$checkpoint")" = 600 &&
+   test "$(stat -c %u "$checkpoint")" = "$(id -u)"'
