@@ -3,12 +3,14 @@
 require "yaml"
 require "pathname"
 require "tzinfo"
+require "uri"
 
 module Prdigest
   class Config
     attr_reader :raw, :path
 
     REPOSITORY_SEGMENT = /\A[A-Za-z0-9_.-]+\z/
+    ENVIRONMENT_VARIABLE = /\A[A-Za-z_][A-Za-z0-9_]*\z/
 
     def self.resolve_path(explicit: nil, env: ENV, system_path: "/etc/prdigest/config.yml")
       return File.expand_path(explicit) if explicit && !explicit.to_s.empty?
@@ -73,6 +75,26 @@ module Prdigest
       env[env_name.to_s].to_s
     end
 
+    def prose_provider
+      prose_config["provider"].to_s
+    end
+
+    def prose_base_url
+      prose_config["base_url"].to_s.strip
+    end
+
+    def prose_model
+      prose_config["model"].to_s.strip
+    end
+
+    def prose_api_key_env
+      prose_config["api_key_env"].to_s.strip
+    end
+
+    def prose_api_key(env = ENV)
+      env[prose_api_key_env].to_s
+    end
+
     def chat_id
       Integer(raw.dig("telegram", "chat_id"))
     rescue TypeError, ArgumentError
@@ -117,7 +139,7 @@ module Prdigest
 
     def validate!(capability: :run)
       capability = capability.to_sym
-      unless %i[facts run].include?(capability)
+      unless %i[facts run prose prose_delivery].include?(capability)
         raise ArgumentError, "unknown configuration capability: #{capability}"
       end
 
@@ -132,12 +154,57 @@ module Prdigest
       repos
       return self if capability == :facts
 
+      validate_prose! if %i[prose prose_delivery].include?(capability)
+      return self if capability == :prose
+
+      validate_telegram!
+      self
+    end
+
+    private
+
+    def prose_config
+      section = raw["prose"]
+      section.is_a?(Hash) ? section : {}
+    end
+
+    def validate_prose!
+      unless raw["prose"].is_a?(Hash)
+        raise ConfigError, "prose must be a mapping"
+      end
+      if prose_config.key?("api_key")
+        raise ConfigError, "prose API key must be supplied through an environment variable"
+      end
+      unless prose_provider == "openai_compatible"
+        raise ConfigError, "prose.provider must be openai_compatible"
+      end
+      validate_prose_base_url!
+      raise ConfigError, "prose.model must not be blank" if prose_model.empty?
+      unless prose_api_key_env.match?(ENVIRONMENT_VARIABLE)
+        raise ConfigError, "prose.api_key_env must name an environment variable"
+      end
+    end
+
+    def validate_prose_base_url!
+      uri = URI.parse(prose_base_url)
+      valid = %w[http https].include?(uri.scheme) &&
+        !uri.host.to_s.empty? &&
+        uri.userinfo.nil? &&
+        uri.query.nil? &&
+        uri.fragment.nil?
+      return if valid
+
+      raise ConfigError, "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
+    rescue URI::InvalidURIError
+      raise ConfigError, "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
+    end
+
+    def validate_telegram!
       raise ConfigError, "telegram.chat_id is required" if chat_id.nil?
       raise ConfigError, "telegram.chat_id_allowlist must not be empty" if chat_id_allowlist.empty?
       unless chat_id_allowlist.include?(chat_id)
         raise ConfigError, "telegram.chat_id must be present in chat_id_allowlist"
       end
-      self
     end
   end
 end

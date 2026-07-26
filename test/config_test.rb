@@ -126,7 +126,104 @@ class ConfigTest < Minitest::Test
     assert_equal "telegram.chat_id is required", error.message
   end
 
+  def test_prose_capability_requires_only_github_and_openai_compatible_provider
+    path = write_config(
+      "timezone" => "Europe/London",
+      "github" => { "repos" => ["owner/repo"] },
+      "prose" => {
+        "provider" => "openai_compatible",
+        "base_url" => "https://openrouter.ai/api/v1/",
+        "model" => "provider/model",
+        "api_key_env" => "OPENROUTER_API_KEY"
+      }
+    )
+
+    config = Prdigest::Config.load(path, capability: :prose)
+
+    assert_equal "openai_compatible", config.prose_provider
+    assert_equal "https://openrouter.ai/api/v1/", config.prose_base_url
+    assert_equal "provider/model", config.prose_model
+    assert_equal "OPENROUTER_API_KEY", config.prose_api_key_env
+    assert_equal "env-secret", config.prose_api_key("OPENROUTER_API_KEY" => "env-secret")
+    assert_nil config.chat_id
+  end
+
+  def test_prose_delivery_additionally_requires_allowlisted_telegram
+    raw = {
+      "github" => { "repos" => ["owner/repo"] },
+      "prose" => valid_prose
+    }
+    error = assert_raises(Prdigest::ConfigError) do
+      Prdigest::Config.load(write_config(raw), capability: :prose_delivery)
+    end
+    assert_equal "telegram.chat_id is required", error.message
+
+    raw["telegram"] = { "chat_id" => 1, "chat_id_allowlist" => [1] }
+    config = Prdigest::Config.load(write_config(raw), capability: :prose_delivery)
+    assert_equal 1, config.chat_id
+  end
+
+  def test_prose_scope_rejects_invalid_provider_settings_and_inline_secrets
+    invalid = [
+      [{}, /prose.provider/],
+      [valid_prose.merge("provider" => "openrouter"), /prose.provider/],
+      [valid_prose.merge("base_url" => "provider.example/v1"), /prose.base_url/],
+      [valid_prose.merge("base_url" => "ftp://provider.example/v1"), /prose.base_url/],
+      [valid_prose.merge("base_url" => "https://user:pass@provider.example/v1"), /prose.base_url/],
+      [valid_prose.merge("base_url" => "https://provider.example/v1?secret=yes"), /prose.base_url/],
+      [valid_prose.merge("base_url" => "https://provider.example/v1#fragment"), /prose.base_url/],
+      [valid_prose.merge("model" => "  "), /prose.model/],
+      [valid_prose.merge("api_key_env" => "1-BAD"), /prose.api_key_env/],
+      [valid_prose.merge("api_key" => "inline-secret"), /environment variable/]
+    ]
+
+    invalid.each do |prose, expected|
+      error = assert_raises(Prdigest::ConfigError) do
+        Prdigest::Config.load(
+          write_config("github" => { "repos" => ["owner/repo"] }, "prose" => prose),
+          capability: :prose
+        )
+      end
+      assert_match expected, error.message
+      refute_includes error.message, "inline-secret"
+    end
+  end
+
+  def test_http_base_url_is_valid_for_local_openai_compatible_endpoints
+    path = write_config(
+      "github" => { "repos" => ["owner/repo"] },
+      "prose" => valid_prose.merge("base_url" => "http://localhost:11434/v1")
+    )
+
+    assert_equal "http://localhost:11434/v1", Prdigest::Config.load(path, capability: :prose).prose_base_url
+  end
+
+  def test_run_and_facts_do_not_validate_unselected_prose_configuration
+    invalid_prose = { "provider" => "not-supported", "api_key" => "inline-secret" }
+    facts_path = write_config(
+      "github" => { "repos" => ["owner/repo"] },
+      "prose" => invalid_prose
+    )
+    assert_equal ["owner/repo"], Prdigest::Config.load(facts_path, capability: :facts).repos
+
+    run_path = write_config(
+      "github" => { "repos" => ["owner/repo"] },
+      "telegram" => { "chat_id" => 1, "chat_id_allowlist" => [1] },
+      "prose" => invalid_prose
+    )
+    assert_equal 1, Prdigest::Config.load(run_path).chat_id
+  end
+
   private
+
+  def valid_prose
+    {
+      "provider" => "openai_compatible",
+      "base_url" => "https://provider.example/v1",
+      "model" => "provider/model",
+      "api_key_env" => "PROVIDER_API_KEY"
+    }
+  end
 
   def write_config(hash)
     path = File.join(Dir.mktmpdir, "config.yml")

@@ -20,6 +20,14 @@ module Prdigest
       super(message)
     end
   end
+  class GenerationError < Error
+    attr_reader :kind
+
+    def initialize(message, kind: "provider")
+      @kind = kind
+      super(message)
+    end
+  end
   class SendError < Error
     attr_reader :kind, :delivery
 
@@ -39,7 +47,9 @@ require_relative "prdigest/github"
 require_relative "prdigest/collector"
 require_relative "prdigest/facts"
 require_relative "prdigest/facts_runner"
+require_relative "prdigest/openai_compatible"
 require_relative "prdigest/renderer"
+require_relative "prdigest/prose_renderer"
 require_relative "prdigest/delivery_checkpoint_store"
 require_relative "prdigest/telegram"
 require_relative "prdigest/result"
