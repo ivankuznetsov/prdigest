@@ -102,7 +102,7 @@ module Prdigest
       @root = File.expand_path(root)
     end
 
-    def with_checkpoint(date:, chat_id:, scope:, chunks:)
+    def with_checkpoint(date:, chat_id:, scope:, chunks: nil, chunk_factory: nil)
       normalized_date = Date.iso8601(date.to_s)
       ensure_root!
       path = File.join(@root, "#{normalized_date}.json")
@@ -123,14 +123,15 @@ module Prdigest
           date: normalized_date,
           chat_id: Integer(chat_id),
           scope: Array(scope).map(&:to_s),
-          chunks: Array(chunks).map(&:to_s)
+          chunks: chunks,
+          chunk_factory: chunk_factory
         )
         fail_if_unavailable!(data)
         yield Session.new(path: path, data: data)
       ensure
         lock.flock(File::LOCK_UN)
       end
-    rescue SendError, StateError
+    rescue Error
       raise
     rescue StandardError => e
       raise StateError, "cannot access delivery checkpoint (#{e.class})"
@@ -158,12 +159,13 @@ module Prdigest
       File.chmod(0o700, @root)
     end
 
-    def load_or_create(path, date:, chat_id:, scope:, chunks:)
+    def load_or_create(path, date:, chat_id:, scope:, chunks:, chunk_factory:)
       if File.file?(path)
         data = JSON.parse(File.read(path))
         validate!(data, date: date, chat_id: chat_id, scope: scope)
         data
       else
+        chunks = build_chunks(chunks, chunk_factory)
         data = {
           "schema" => SCHEMA,
           "schema_version" => SCHEMA_VERSION,
@@ -189,6 +191,17 @@ module Prdigest
         "delivery checkpoint is invalid (#{e.class})",
         kind: "delivery_checkpoint_permanent"
       )
+    end
+
+    def build_chunks(chunks, chunk_factory)
+      both_missing = chunks.nil? && chunk_factory.nil?
+      both_present = !chunks.nil? && !chunk_factory.nil?
+      if both_missing || both_present
+        raise StateError, "delivery checkpoint requires exactly one payload source"
+      end
+
+      source = chunk_factory ? chunk_factory.call : chunks
+      Array(source).map(&:to_s)
     end
 
     def validate!(data, date:, chat_id:, scope:)

@@ -4,6 +4,15 @@ Runtime dependencies are Thor for the CLI surface, Octokit for GitHub REST,
 Faraday Retry as part of the HTTP stack, TZInfo for IANA civil-time conversion,
 and ERB because Octokit loads it on supported Ruby versions. Telegram delivery
 uses Ruby's `Net::HTTP` with peer verification and no redirect handling.
+Optional standalone prose also uses `Net::HTTP`, targeting the common
+OpenAI-compatible `/chat/completions` contract with a bearer key named by
+configuration. It adds no provider SDK dependency and is never constructed by
+`run` or `facts`.
+
+The OpenClaw integration is a text-only `SKILL.md` bundle owned by this
+repository. ClawHub distributes that bundle separately from RubyGems; the bundle
+contains no executable runtime and cannot install the Ruby gem through
+unsupported installer metadata.
 
 Minitest, Rake, and WebMock are development-only. WebMock disables external
 connections for every automated test. Linux/container deployments require the

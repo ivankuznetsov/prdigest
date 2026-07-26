@@ -8,9 +8,9 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Ivan Kuznetsov"]
   spec.email         = ["ivan@ikuznetsov.com"]
 
-  spec.summary       = "Standalone multi-repo daily merged-PR digests for Telegram"
-  spec.description   = "Config-driven GitHub merged-PR digests with Telegram delivery. " \
-                       "Hive-independent: repo list + GitHub token + chat allowlist."
+  spec.summary       = "Deterministic multi-repo merged-PR facts and digests"
+  spec.description   = "Config-driven GitHub merged-PR facts with deterministic Telegram delivery " \
+                       "and optional OpenAI-compatible prose. Hive-independent and secret-safe."
   spec.homepage      = "https://github.com/ivankuznetsov/prdigest"
   spec.license       = "MIT"
   spec.required_ruby_version = ">= 3.2.0"

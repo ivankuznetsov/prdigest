@@ -34,13 +34,14 @@ module Prdigest
       @delivered_chunk = false
     end
 
-    def deliver(chunks, digest_date:, checkpoint_store:, scope:)
+    def deliver(chunks = nil, digest_date:, checkpoint_store:, scope:, chunk_factory: nil)
       refuse_unlisted_chat! unless @allowlist.include?(@chat_id)
       checkpoint_store.with_checkpoint(
         date: digest_date,
         chat_id: @chat_id,
         scope: scope,
-        chunks: chunks
+        chunks: chunks,
+        chunk_factory: chunk_factory
       ) do |delivery|
         @delivered_chunk ||= delivery.next_chunk.positive?
         (delivery.next_chunk...delivery.chunks.length).each do |index|

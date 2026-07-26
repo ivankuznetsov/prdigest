@@ -26,6 +26,15 @@ digest:
   send_empty: true
   empty_message: "Merged PR digest — {date}\nTotal: 0 PRs"
 
+prose:
+  # Used only by `prdigest prose`; `run` and `facts` never contact this endpoint.
+  provider: openai_compatible
+  base_url: https://openrouter.ai/api/v1
+  # Replace with a model identifier accepted by the configured endpoint.
+  model: provider/model
+  # The key value belongs in the environment, never this file.
+  api_key_env: OPENROUTER_API_KEY
+
 state:
   path: /var/lib/prdigest/state.json
   # Stable rendered chunks and next-unsent position, separate from the date cursor.

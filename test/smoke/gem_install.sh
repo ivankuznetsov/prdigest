@@ -43,7 +43,7 @@ run_and_show "$tmp/version.out" env -i \
   HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" RUBYOPT= RUBYLIB= \
   prdigest version
-grep -Fq "prdigest 0.1.1" "$tmp/version.out"
+grep -Fq "prdigest 0.2.0" "$tmp/version.out"
 
 env -i HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" RUBYOPT= RUBYLIB= \
@@ -63,3 +63,15 @@ run_and_show "$tmp/result.json" env -i \
 
 grep -Fq '"status":"dry_run"' "$tmp/result.json"
 grep -Fq 'Synthetic packaged Time result' "$tmp/result.json"
+
+run_and_show "$tmp/facts.json" env -i \
+  HOME="$tmp/home" PATH="$smoke_path" \
+  GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" \
+  GITHUB_TOKEN=synthetic-smoke-token \
+  RUBYOPT="-r$root/test/support/offline_smoke_stubs.rb" RUBYLIB= \
+  prdigest facts --config "$tmp/config/config.yml" --date 2026-01-15
+
+grep -Fq '"schema":"prdigest-facts"' "$tmp/facts.json"
+grep -Fq '"schema_version":1' "$tmp/facts.json"
+grep -Fq '"status":"success"' "$tmp/facts.json"
+grep -Fq 'Synthetic packaged Time result' "$tmp/facts.json"

@@ -18,7 +18,8 @@ class ResultTest < Minitest::Test
       "telegram" => 4, "telegram_refused" => 4, "telegram_permanent" => 4,
       "telegram_ambiguous" => 4, "delivery_checkpoint" => 4,
       "delivery_checkpoint_permanent" => 4,
-      "state" => 5, "render" => 1
+      "state" => 5, "provider" => 7, "provider_ambiguous" => 7,
+      "render" => 1
     }.each do |kind, code|
       result = Prdigest::Result.failure(mode: "scheduled", error_kind: kind, message: "safe")
       assert_equal code, result.exit_code
