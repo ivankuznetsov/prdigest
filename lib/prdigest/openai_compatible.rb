@@ -3,7 +3,6 @@
 require "json"
 require "net/http"
 require "openssl"
-require "timeout"
 require "uri"
 
 module Prdigest
@@ -38,7 +37,7 @@ module Prdigest
     def initialize(api_key:, base_url:, model:, transport: NetHTTPTransport.new,
                    sleeper: ->(seconds) { sleep(seconds) })
       @api_key = api_key.to_s
-      @base_uri = parse_base_uri(base_url)
+      @base_uri = Config.parse_prose_base_uri(base_url).freeze
       @model = model.to_s.strip
       @transport = transport
       @sleeper = sleeper
@@ -67,10 +66,11 @@ module Prdigest
     def request(facts_json)
       attempts = 0
       waited = 0
+      body = request_body(facts_json)
 
       loop do
         attempts += 1
-        response = perform_request(facts_json)
+        response = perform_request(body)
         code = response_code(response)
         return response_content(response) if (200..299).cover?(code)
 
@@ -91,10 +91,10 @@ module Prdigest
       end
     end
 
-    def perform_request(facts_json)
+    def perform_request(body)
       @transport.call(
         uri: endpoint,
-        request: build_request(facts_json),
+        request: build_request(body),
         open_timeout: OPEN_TIMEOUT,
         read_timeout: READ_TIMEOUT,
         write_timeout: WRITE_TIMEOUT
@@ -106,18 +106,22 @@ module Prdigest
       )
     end
 
-    def build_request(facts_json)
+    def build_request(body)
       request = Net::HTTP::Post.new(endpoint.request_uri)
       request["Authorization"] = "Bearer #{@api_key}"
       request["Content-Type"] = "application/json"
-      request.body = JSON.generate(
+      request.body = body
+      request
+    end
+
+    def request_body(facts_json)
+      JSON.generate(
         model: @model,
         messages: [
           { role: "system", content: SYSTEM_MESSAGE },
           { role: "user", content: facts_json }
         ]
       )
-      request
     end
 
     def response_code(response)
@@ -164,18 +168,5 @@ module Prdigest
       end
     end
 
-    def parse_base_uri(value)
-      uri = URI.parse(value.to_s.strip)
-      valid = %w[http https].include?(uri.scheme) &&
-        !uri.host.to_s.empty? &&
-        uri.userinfo.nil? &&
-        uri.query.nil? &&
-        uri.fragment.nil?
-      raise ConfigError, "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment" unless valid
-
-      uri.freeze
-    rescue URI::InvalidURIError
-      raise ConfigError, "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
-    end
   end
 end

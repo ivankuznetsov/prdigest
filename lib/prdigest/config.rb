@@ -11,6 +11,8 @@ module Prdigest
 
     REPOSITORY_SEGMENT = /\A[A-Za-z0-9_.-]+\z/
     ENVIRONMENT_VARIABLE = /\A[A-Za-z_][A-Za-z0-9_]*\z/
+    PROSE_BASE_URL_ERROR =
+      "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
 
     def self.resolve_path(explicit: nil, env: ENV, system_path: "/etc/prdigest/config.yml")
       return File.expand_path(explicit) if explicit && !explicit.to_s.empty?
@@ -50,6 +52,20 @@ module Prdigest
       normalized.each_with_object({}) do |repository, unique|
         unique[repository.downcase] ||= repository
       end.values.freeze
+    end
+
+    def self.parse_prose_base_uri(value)
+      uri = URI.parse(value.to_s.strip)
+      valid = %w[http https].include?(uri.scheme) &&
+        !uri.host.to_s.empty? &&
+        uri.userinfo.nil? &&
+        uri.query.nil? &&
+        uri.fragment.nil?
+      raise ConfigError, PROSE_BASE_URL_ERROR unless valid
+
+      uri
+    rescue URI::InvalidURIError
+      raise ConfigError, PROSE_BASE_URL_ERROR
     end
 
     def initialize(raw, path: nil)
@@ -178,25 +194,11 @@ module Prdigest
       unless prose_provider == "openai_compatible"
         raise ConfigError, "prose.provider must be openai_compatible"
       end
-      validate_prose_base_url!
+      self.class.parse_prose_base_uri(prose_base_url)
       raise ConfigError, "prose.model must not be blank" if prose_model.empty?
       unless prose_api_key_env.match?(ENVIRONMENT_VARIABLE)
         raise ConfigError, "prose.api_key_env must name an environment variable"
       end
-    end
-
-    def validate_prose_base_url!
-      uri = URI.parse(prose_base_url)
-      valid = %w[http https].include?(uri.scheme) &&
-        !uri.host.to_s.empty? &&
-        uri.userinfo.nil? &&
-        uri.query.nil? &&
-        uri.fragment.nil?
-      return if valid
-
-      raise ConfigError, "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
-    rescue URI::InvalidURIError
-      raise ConfigError, "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
     end
 
     def validate_telegram!

@@ -61,13 +61,14 @@ module Prdigest
       provider_key = @config.prose_api_key(@env)
       raise ConfigError, "prose API key environment variable is unset" if provider_key.empty?
 
-      digest = Collector.new(
-        clock: @clock,
-        github: @github || GitHub.new(token: github_token),
+      facts = FactsRunner.new(
+        config: @config,
+        date: date,
         repositories: @repositories,
-        line_stats: @config.line_stats?
-      ).call(date: date)
-      facts = Facts.new(digest: digest, timezone: @config.timezone).to_h
+        env: @env,
+        clock: @clock,
+        github: @github || GitHub.new(token: github_token)
+      ).call
       prose = (@generator || build_generator(provider_key)).generate(facts)
       rendered = @renderer.render(prose)
       GeneratedPayload.new(prose: prose, chunks: rendered.chunks)

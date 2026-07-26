@@ -15,7 +15,7 @@ module Prdigest
         raise RenderError.new("prose provider output is blank", kind: "prose_render")
       end
 
-      chunks = text.chars.each_slice(@limit).map do |characters|
+      chunks = text.each_char.each_slice(@limit).map do |characters|
         CGI.escapeHTML(characters.join).freeze
       end
       Renderer::Output.new(chunks.freeze, "rendered")

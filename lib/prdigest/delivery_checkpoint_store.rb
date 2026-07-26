@@ -194,7 +194,9 @@ module Prdigest
     end
 
     def build_chunks(chunks, chunk_factory)
-      if chunk_factory.nil? == chunks.nil?
+      both_missing = chunks.nil? && chunk_factory.nil?
+      both_present = !chunks.nil? && !chunk_factory.nil?
+      if both_missing || both_present
         raise StateError, "delivery checkpoint requires exactly one payload source"
       end
 
