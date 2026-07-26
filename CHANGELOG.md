@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-07-26
 
 - Add a deterministic `prdigest facts` JSON contract over the canonical
   collection engine without scheduling, Telegram, or provider side effects.

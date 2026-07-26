@@ -2,7 +2,7 @@
 
 - GitHub publishes no search-index freshness SLA. The 09:05 host-local timer and
   explicit replay reduce the risk but cannot prove a merge was indexed on time.
-- GitHub search's 1,000-result ceiling is a hard v0.1.x operating limit; PRDigest
+- GitHub search's 1,000-result ceiling is a hard operating limit; PRDigest
   refuses incomplete/over-cap days instead of truncating.
 - Concurrent scheduled invocations still have no global date-cursor lock and are
   unsupported. Per-date delivery is locked and checkpointed, so a competing
@@ -12,10 +12,10 @@
 - Authenticated GitHub/Telegram smokes and the clean Ubuntu walkthrough require
   operator infrastructure and credentials. Their checklist is documented in the
   README; retain only redacted timestamp/status evidence when performed.
-- The OpenClaw skill is ClawHub-ready source, not a confirmed live listing.
-  Publication requires a separate explicit release request and version direction;
-  exact-version inspection, a clean install comparison, and an authenticated
-  OpenClaw invocation remain unperformed.
+- The OpenClaw skill is ClawHub-ready source prepared with the v0.2.0 release,
+  not a confirmed live listing. Publication requires separate explicit
+  authorization; exact-version inspection, a clean install comparison, and an
+  authenticated OpenClaw invocation remain unperformed.
 - Live OpenAI-compatible provider behavior is not claimed by the offline suite.
   An authorized smoke still needs to prove one real endpoint/model and verify
   that retained evidence contains no key, private facts, request body, provider

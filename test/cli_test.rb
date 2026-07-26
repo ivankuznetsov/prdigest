@@ -19,6 +19,18 @@ class CliTest < Minitest::Test
     end
   end
 
+  def test_serve_stub_uses_version_independent_scheduler_guidance
+    path = write_config
+    out = StringIO.new
+    err = StringIO.new
+
+    code = Prdigest::CLI.invoke(["serve", "--config", path], out: out, err: err)
+
+    assert_equal 0, code
+    assert_empty out.string
+    assert_equal "prdigest serve: not implemented — use systemd timer + `prdigest run`\n", err.string
+  end
+
   def test_prose_stdout_emits_exact_raw_text_with_one_terminal_newline
     path = write_prose_config(include_telegram: false)
     captured = nil

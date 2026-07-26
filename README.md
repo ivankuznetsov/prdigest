@@ -131,7 +131,7 @@ To build and install the current checkout as a gem without publishing it:
 
 ```sh
 gem build prdigest.gemspec
-gem install prdigest-0.1.1.gem
+gem install prdigest-0.2.0.gem
 prdigest version
 ```
 
@@ -186,7 +186,7 @@ annotated configuration.
 - Repository order controls digest order.
 - `max_catchup_days` must be between `1` and `30`.
 - `chat_id` must appear in the non-empty allowlist. Extra IDs are accepted for
-  schema compatibility, but v0.1.x sends only to `chat_id`.
+  schema compatibility, but delivery sends only to `chat_id`.
 - Token values belong in environment variables, never YAML.
 - The prose block is validated only for `prdigest prose`; it does not ambiently
   enable provider access for deterministic commands.

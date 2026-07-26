@@ -8,6 +8,9 @@ The skill invokes only the versioned `prdigest facts` boundary. OpenClaw writes
 the prose itself from that document. It does not invoke deterministic Telegram
 delivery, PRDigest's optional provider mode, or GitHub directly.
 
+The coordinated source release target is `0.2.0`. ClawHub publication remains a
+separate operator-authorized action after that exact gem is publicly installable.
+
 ## Installation boundary
 
 ClawHub publication is not part of normal build or test work. After a separately

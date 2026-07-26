@@ -46,7 +46,7 @@ module Prdigest
         capability = config_capability(parsed)
         config = Config.load(path, capability: capability)
         if parsed[:command] == "serve"
-          err.puts "prdigest serve: deferred in v0.1.x — use systemd timer + `prdigest run`"
+          err.puts "prdigest serve: not implemented — use systemd timer + `prdigest run`"
           return 0
         end
 

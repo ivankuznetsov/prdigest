@@ -30,5 +30,5 @@
 - The OpenClaw skill belongs to this repository and invokes only `prdigest facts`.
   It remains visible when the Ruby CLI is missing so setup can require
   consent; unsupported Ruby-gem installer metadata is not invented.
-- systemd remains the only scheduler for v0.1.x; `serve` is a compatibility stub.
+- systemd remains the only scheduler; `serve` is a compatibility stub.
 - Release preparation is reversible and never tags, publishes, or creates a release.
