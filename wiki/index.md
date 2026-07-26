@@ -8,3 +8,4 @@
 - [v0.1.1 release log](log.d/20260724T224900Z-release-v0-1-1.md)
 - [Three digest modes](log.d/20260726T001856Z-three-digest-modes.md)
 - [v0.2.0 release preparation](log.d/20260726T124712Z-release-v0-2-0.md)
+- [Trusted RubyGems publishing](log.d/20260726T144031Z-trusted-rubygems-publishing.md)

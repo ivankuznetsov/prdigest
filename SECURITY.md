@@ -58,4 +58,6 @@ state files, or unredacted journal output.
 ## Supported release
 
 Security fixes target the latest published release. The build and test process
-does not tag or publish releases automatically.
+does not tag or publish releases automatically. The exact-tag release workflow
+uses a RubyGems trusted publisher and a short-lived GitHub OIDC credential; no
+long-lived RubyGems API key is stored in the repository or Actions secrets.
