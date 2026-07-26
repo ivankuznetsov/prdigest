@@ -208,6 +208,27 @@ class ProseRunnerTest < Minitest::Test
     end
   end
 
+  def test_provider_control_characters_are_not_checkpointed_or_sent
+    Dir.mktmpdir do |root|
+      telegram = CheckpointingTelegram.new
+      instance = runner(
+        config: config(delivery_path: root),
+        deliver: true,
+        env: credentials,
+        github: FakeGitHub.new,
+        generator: FakeGenerator.new(prose: "\e]0;forged\aDigest"),
+        renderer: Prdigest::ProseRenderer.new,
+        telegram_factory: -> { telegram }
+      )
+
+      error = assert_raises(Prdigest::RenderError) { instance.call }
+
+      assert_equal "prose_render", error.kind
+      assert_empty telegram.network_sends
+      refute File.exist?(File.join(root, "prose", "#{DATE}.json"))
+    end
+  end
+
   def test_fresh_delivery_checks_generation_credentials_before_network
     [
       [{ "PROVIDER_KEY" => "provider", "TELEGRAM_BOT_TOKEN" => "telegram" }, "GitHub token is missing"],

@@ -6,6 +6,8 @@
   collection engine without scheduling, Telegram, or provider side effects.
 - Add optional OpenAI-compatible prose for stdout or explicit checkpointed
   Telegram delivery, with provider failures kept visible.
+- Restrict plaintext provider URLs to strict loopback hosts and reject generated
+  terminal control characters before output or delivery.
 - Add a repository-owned, ClawHub-ready OpenClaw skill that writes prose only
   from validated PRDigest facts.
 - Prove the facts command from an isolated installed gem without provider or

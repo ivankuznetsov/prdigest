@@ -12,6 +12,27 @@ class ProseRendererTest < Minitest::Test
     end
   end
 
+  def test_rejects_terminal_control_characters
+    [
+      "\e[31mred\e[0m",
+      "\e]0;forged title\e\\safe",
+      "ring\a",
+      "red\u009B31m"
+    ].each do |text|
+      error = assert_raises(Prdigest::RenderError) { renderer.render(text) }
+      assert_equal "prose_render", error.kind
+      assert_match(/control characters/, error.message)
+    end
+  end
+
+  def test_allows_tabs_and_newlines
+    text = "Repository\tSummary\nowner/repo\tMerged"
+
+    output = renderer.render(text)
+
+    assert_equal text, output.chunks.map { |chunk| CGI.unescapeHTML(chunk) }.join
+  end
+
   def test_escapes_html_injection_after_splitting_plain_text
     text = "<b>trusted?</b> & \"quoted\" 'value'"
 

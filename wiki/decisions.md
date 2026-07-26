@@ -22,6 +22,9 @@
   needs an explicit OpenAI-compatible endpoint/model/key environment reference.
 - AI is presentation over untrusted facts, never a facts source. Provider
   failures are visible with exit 7 and do not silently fall back.
+- Remote provider credentials and facts cross only HTTPS; plaintext HTTP is
+  restricted to exact loopback hosts. Generated terminal controls are rejected
+  before prose can reach stdout, checkpoints, or Telegram.
 - Provider-backed Telegram delivery persists final rendered prose before sending
   and replays that exact checkpoint without re-querying GitHub or the provider.
 - The OpenClaw skill belongs to this repository and invokes only `prdigest facts`.

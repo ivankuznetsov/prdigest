@@ -120,11 +120,14 @@ identical JSON.
 OpenAI-compatible Chat Completions request to
 `<prose.base_url>/chat/completions`. Without `--deliver`, it writes the
 provider's plain text to stdout and constructs no Telegram or checkpoint state.
-With `--deliver`, it escapes and chunks that text, durably stores the complete
-payload under `state.delivery_path/prose`, and only then sends to the
-allowlisted chat. Provider, GitHub, rendering, and delivery failures are
-explicit; PRDigest never silently substitutes deterministic prose or another
-provider.
+Remote provider URLs must use HTTPS; plaintext HTTP is accepted only for exact
+loopback hosts. Provider output containing terminal control characters is
+rejected before stdout, checkpoints, or Telegram, while tabs and newlines remain
+valid plain text. With `--deliver`, PRDigest escapes and chunks that text,
+durably stores the complete payload under `state.delivery_path/prose`, and only
+then sends to the allowlisted chat. Provider, GitHub, rendering, and delivery
+failures are explicit; PRDigest never silently substitutes deterministic prose
+or another provider.
 
 `--json` emits a versioned `prdigest-result` document with `status`, `mode`, `requested_days`,
 `settled_days`, `skipped_days`, `failed_date`, `remaining_days`, nullable
@@ -178,7 +181,9 @@ chunks before checking GitHub or provider credentials, so it does not regenerate
 different prose. Missing provider credentials or a provider failure on a fresh
 date sends nothing and leaves no payload checkpoint. As with deterministic
 delivery, archive a prose checkpoint only after deliberate operator
-reconciliation.
+reconciliation. A render failure or checkpoint-write failure happens after a
+provider may already have completed a billable request but before a payload is
+durable; retrying that fresh date can therefore invoke the provider again.
 
 State is secret-free JSON version 1:
 

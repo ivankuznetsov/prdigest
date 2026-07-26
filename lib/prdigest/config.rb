@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-require "yaml"
+require "ipaddr"
 require "pathname"
 require "tzinfo"
 require "uri"
+require "yaml"
 
 module Prdigest
   class Config
@@ -11,8 +12,11 @@ module Prdigest
 
     REPOSITORY_SEGMENT = /\A[A-Za-z0-9_.-]+\z/
     ENVIRONMENT_VARIABLE = /\A[A-Za-z_][A-Za-z0-9_]*\z/
+    IPV4_LOOPBACK = IPAddr.new("127.0.0.0/8").freeze
+    IPV6_LOOPBACK = IPAddr.new("::1").freeze
     PROSE_BASE_URL_ERROR =
-      "prose.base_url must be an absolute HTTP(S) URL without credentials, query, or fragment"
+      "prose.base_url must be an absolute HTTPS URL (or HTTP loopback URL) " \
+      "without credentials, query, or fragment"
 
     def self.resolve_path(explicit: nil, env: ENV, system_path: "/etc/prdigest/config.yml")
       return File.expand_path(explicit) if explicit && !explicit.to_s.empty?
@@ -60,13 +64,25 @@ module Prdigest
         !uri.host.to_s.empty? &&
         uri.userinfo.nil? &&
         uri.query.nil? &&
-        uri.fragment.nil?
+        uri.fragment.nil? &&
+        (uri.scheme == "https" || loopback_host?(uri.host))
       raise ConfigError, PROSE_BASE_URL_ERROR unless valid
 
       uri
     rescue URI::InvalidURIError
       raise ConfigError, PROSE_BASE_URL_ERROR
     end
+
+    def self.loopback_host?(host)
+      return true if host.casecmp("localhost").zero?
+
+      address = IPAddr.new(host)
+      (address.ipv4? && IPV4_LOOPBACK.include?(address)) ||
+        (address.ipv6? && address == IPV6_LOOPBACK)
+    rescue IPAddr::InvalidAddressError
+      false
+    end
+    private_class_method :loopback_host?
 
     def initialize(raw, path: nil)
       @raw = raw

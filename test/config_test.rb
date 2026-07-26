@@ -189,13 +189,39 @@ class ConfigTest < Minitest::Test
     end
   end
 
-  def test_http_base_url_is_valid_for_local_openai_compatible_endpoints
-    path = write_config(
-      "github" => { "repos" => ["owner/repo"] },
-      "prose" => valid_prose.merge("base_url" => "http://localhost:11434/v1")
-    )
+  def test_http_base_url_is_valid_only_for_strict_loopback_endpoints
+    [
+      "http://localhost:11434/v1",
+      "http://127.0.0.1:11434/v1",
+      "http://127.255.255.255:11434/v1",
+      "http://[::1]:11434/v1"
+    ].each do |base_url|
+      path = write_config(
+        "github" => { "repos" => ["owner/repo"] },
+        "prose" => valid_prose.merge("base_url" => base_url)
+      )
 
-    assert_equal "http://localhost:11434/v1", Prdigest::Config.load(path, capability: :prose).prose_base_url
+      assert_equal base_url, Prdigest::Config.load(path, capability: :prose).prose_base_url
+    end
+  end
+
+  def test_http_base_url_rejects_remote_and_loopback_lookalike_hosts
+    [
+      "http://provider.example/v1",
+      "http://localhost.example/v1",
+      "http://127.0.0.1.example/v1",
+      "http://[::ffff:127.0.0.1]/v1"
+    ].each do |base_url|
+      path = write_config(
+        "github" => { "repos" => ["owner/repo"] },
+        "prose" => valid_prose.merge("base_url" => base_url)
+      )
+
+      error = assert_raises(Prdigest::ConfigError) do
+        Prdigest::Config.load(path, capability: :prose)
+      end
+      assert_match(/prose.base_url/, error.message)
+    end
   end
 
   def test_run_and_facts_do_not_validate_unselected_prose_configuration

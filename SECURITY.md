@@ -14,10 +14,12 @@ restrict journal retention.
 
 Standalone prose uses the environment variable named by
 `prose.api_key_env`. Never place the provider key itself in YAML, shell history,
-arguments, checkpoints, fixtures, or logs. Use an HTTPS provider base URL except
-for an intentionally local loopback endpoint. PRDigest rejects provider URLs
-with embedded credentials, query strings, or fragments and does not include
-provider response bodies in errors.
+arguments, checkpoints, fixtures, or logs. Remote provider URLs must use HTTPS;
+plaintext HTTP is accepted only for exact `localhost`, IPv4 `127.0.0.0/8`, or
+IPv6 `::1` loopback hosts. PRDigest rejects provider URLs with embedded
+credentials, query strings, or fragments and does not include provider response
+bodies in errors. Generated prose containing C0/C1 terminal controls is rejected
+before stdout, checkpoints, or Telegram; tabs and newlines remain allowed.
 
 Private pull-request titles and author names cross from GitHub into the configured
 Telegram chat. Treat that chat and its members as having access to repository

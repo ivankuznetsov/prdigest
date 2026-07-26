@@ -13,7 +13,9 @@ bypasses schedule state, rendering, Telegram, and providers to serialize one
 date as `prdigest-facts` schema version 1. `ProseRunner` passes that exact facts
 document to an `OpenAICompatible` Chat Completions client, then returns raw
 plain text or safely escapes and delivers it only when `--deliver` is explicit.
-No provider configuration is consulted by deterministic `run` or `facts`.
+Remote providers require HTTPS, plaintext HTTP is loopback-only, and generated
+C0/C1 terminal controls are rejected before stdout or delivery. No provider
+configuration is consulted by deterministic `run` or `facts`.
 
 Scheduled real runs read timezone-bound state, checkpoint an over-cap skipped
 prefix, and process retained dates oldest-first. For each date, the clock derives
