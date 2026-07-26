@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Add a deterministic `prdigest facts` JSON contract over the canonical
+  collection engine without scheduling, Telegram, or provider side effects.
+- Add optional OpenAI-compatible prose for stdout or explicit checkpointed
+  Telegram delivery, with provider failures kept visible.
+- Add a repository-owned, ClawHub-ready OpenClaw skill that writes prose only
+  from validated PRDigest facts.
+- Prove the facts command from an isolated installed gem without provider or
+  network access beyond the stubbed GitHub boundary.
+
 ## 0.1.1 - 2026-07-25
 
 - Accept Octokit `Time` objects as well as ISO-8601 strings for pull-request

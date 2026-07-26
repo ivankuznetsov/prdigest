@@ -8,10 +8,24 @@ class PackagingTest < Minitest::Test
   def test_release_version_and_deterministic_gem_manifest
     assert_equal "0.1.1", Prdigest::VERSION
     spec = Gem::Specification.load(File.join(ROOT, "prdigest.gemspec"))
-    %w[exe/prdigest README.md LICENSE CHANGELOG.md SECURITY.md lib/prdigest/runner.rb].each do |path|
+    %w[
+      exe/prdigest
+      README.md
+      LICENSE
+      CHANGELOG.md
+      SECURITY.md
+      lib/prdigest/collector.rb
+      lib/prdigest/facts.rb
+      lib/prdigest/facts_runner.rb
+      lib/prdigest/openai_compatible.rb
+      lib/prdigest/prose_renderer.rb
+      lib/prdigest/prose_runner.rb
+      lib/prdigest/runner.rb
+    ].each do |path|
       assert_includes spec.files, path
     end
     refute spec.files.any? { |path| path.start_with?("test/", "bin/") }
+    refute spec.files.any? { |path| path.start_with?("openclaw/") }
   end
 
   def test_container_is_non_root_and_includes_timezone_data

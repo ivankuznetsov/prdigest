@@ -1,15 +1,25 @@
 # PRDigest
 
-PRDigest is a deterministic Ruby oneshot that sends a daily digest of merged
-GitHub pull requests to one allowlisted Telegram chat. It is designed for a
-single operator on a small VPS: repositories are explicit, secrets stay in the
-environment, and a hardened systemd timer owns scheduling.
+PRDigest is a Ruby oneshot with one canonical, deterministic merged-pull-request
+facts engine and three presentation modes:
+
+1. `prdigest run` keeps the original deterministic Telegram workflow used by
+   Hive and small VPS deployments.
+2. `prdigest facts` emits versioned JSON for an OpenClaw skill or another
+   presentation client; OpenClaw writes the prose.
+3. `prdigest prose` optionally asks an OpenAI-compatible provider to write prose
+   for stdout or explicit Telegram delivery.
+
+Repositories are explicit, secrets stay in the environment, and AI is only a
+presentation layer over the same immutable facts. Neither `run` nor `facts`
+enables, configures, or contacts a prose provider.
 
 ## Requirements and installation
 
 - Ruby 3.2–3.4 and `tzdata`
 - a fine-grained GitHub token with read-only access to the listed repositories
-- a dedicated Telegram bot and one destination chat ID
+- a dedicated Telegram bot and one destination chat ID for delivery modes
+- an OpenAI-compatible endpoint, model, and API key only for `prdigest prose`
 
 For development:
 
@@ -17,6 +27,7 @@ For development:
 bundle install
 bundle exec prdigest version
 GITHUB_TOKEN=... bundle exec prdigest run --config configs/config.example.yml --dry-run
+GITHUB_TOKEN=... bundle exec prdigest facts --config configs/config.example.yml
 ```
 
 To build and install the prepared gem without publishing it:
@@ -53,17 +64,27 @@ digest:
 state:
   path: /var/lib/prdigest/state.json
   delivery_path: /var/lib/prdigest/deliveries
+prose:
+  provider: openai_compatible
+  base_url: https://openrouter.ai/api/v1
+  model: provider/model
+  api_key_env: OPENROUTER_API_KEY
 ```
 
 Repository order controls digest order. `max_catchup_days` must be `1..30`.
 `chat_id` must appear in the non-empty allowlist; extra allowlisted IDs are
 accepted for schema compatibility but v0.1.x sends only to `chat_id`. Token
-values belong in environment variables, never YAML.
+values belong in environment variables, never YAML. Replace the example prose
+model with one supported by the configured endpoint. The prose section is
+validated only for `prose`; it does not ambiently enable provider access for
+the deterministic commands.
 
 ## Commands and results
 
 ```sh
 prdigest run [--config PATH] [--date YYYY-MM-DD] [--dry-run] [--json] [--repo OWNER/NAME ...]
+prdigest facts [--config PATH] [--date YYYY-MM-DD] [--repo OWNER/NAME ...]
+prdigest prose [--config PATH] [--date YYYY-MM-DD] [--repo OWNER/NAME ...] [--deliver]
 prdigest serve
 prdigest version
 ```
@@ -77,6 +98,33 @@ Repeatable `--repo` values replace the configured repository list for that run.
 They use the same strict `owner/name` validation and deterministic order as the
 configuration, which lets callers such as Hive supply their registered projects
 without owning a second digest implementation.
+
+`facts` fetches one explicit date or yesterday in the configured timezone and
+prints exactly one JSON document. It never reads or writes scheduling state,
+constructs Telegram delivery, or contacts the configured prose provider.
+Output is always JSON, so `--json` and `--dry-run` are refused. The stable
+envelope is `schema: "prdigest-facts"`, `schema_version: 1`, `status`, nullable
+`error`, and nullable `digest`. A successful `digest` contains:
+
+- `date`, `timezone`, `line_stats`, and `repository_order`;
+- repositories in configured order with ordered pull requests;
+- each pull request's number, title, URL, author, UTC merge time, and nullable
+  addition/deletion/commit statistics; and
+- aggregate pull-request and nullable statistic totals.
+
+Disabled statistics remain present as `null`, not zero. There is deliberately no
+wall-clock generation timestamp, so identical accepted GitHub input produces
+identical JSON.
+
+`prose` uses the same facts document as untrusted data in an
+OpenAI-compatible Chat Completions request to
+`<prose.base_url>/chat/completions`. Without `--deliver`, it writes the
+provider's plain text to stdout and constructs no Telegram or checkpoint state.
+With `--deliver`, it escapes and chunks that text, durably stores the complete
+payload under `state.delivery_path/prose`, and only then sends to the
+allowlisted chat. Provider, GitHub, rendering, and delivery failures are
+explicit; PRDigest never silently substitutes deterministic prose or another
+provider.
 
 `--json` emits a versioned `prdigest-result` document with `status`, `mode`, `requested_days`,
 `settled_days`, `skipped_days`, `failed_date`, `remaining_days`, nullable
@@ -95,6 +143,7 @@ without owning a second digest implementation.
 | 4 | Telegram failure |
 | 5 | state failure |
 | 6 | failure after earlier durable progress |
+| 7 | AI provider failure or ambiguous provider outcome |
 
 ## Delivery and state semantics
 
@@ -121,6 +170,16 @@ Changing the chat or repository scope for an existing date also fails closed.
 Explicit `--date` uses this same safety ledger, so a completed date is a no-op
 unless its checkpoint is deliberately archived first.
 
+Prose delivery uses a separate checkpoint namespace and a checkpoint-first
+generation boundary. On a fresh date, PRDigest fetches facts, obtains provider
+output, safely renders every chunk, and persists that final payload before the
+first Telegram request. A partial or completed retry loads the exact stored
+chunks before checking GitHub or provider credentials, so it does not regenerate
+different prose. Missing provider credentials or a provider failure on a fresh
+date sends nothing and leaves no payload checkpoint. As with deterministic
+delivery, archive a prose checkpoint only after deliberate operator
+reconciliation.
+
 State is secret-free JSON version 1:
 
 ```json
@@ -146,6 +205,27 @@ GitHub does not publish a search-index freshness guarantee. Keep the host
 timezone equal to the configured digest timezone; the supplied 09:05 timer then
 leaves about nine hours after local midnight. If a later audit finds a delayed
 merge, use `--date YYYY-MM-DD` to replay it.
+
+## OpenClaw mode
+
+The repository owns a ClawHub-ready skill at
+[`openclaw/skills/prdigest/SKILL.md`](openclaw/skills/prdigest/SKILL.md).
+It invokes only `prdigest facts`, validates schema version 1 and success, treats
+all pull-request fields as untrusted data rather than instructions, and lets
+OpenClaw write the prose. It does not make a second GitHub request, invoke
+`prdigest run` or `prdigest prose`, deliver to Telegram, or configure a provider.
+
+The expected command after a separately authorized ClawHub publication is:
+
+```sh
+clawhub install @ivankuznetsov/prdigest
+```
+
+This skill is not claimed as published yet. ClawHub installation and Ruby CLI
+installation are separate trust boundaries: the skill stays visible to diagnose
+a missing `prdigest` command, then asks before any global setup change. See
+[`openclaw/README.md`](openclaw/README.md) for the local source and
+release-gated publish checklist.
 
 ## systemd deployment
 
@@ -205,6 +285,9 @@ bodies, message text, or private titles.
   `delivery_checkpoint_permanent` before moving any checkpoint.
 - Exit 5: check `/var/lib/prdigest`, mode/owner, JSON version, date, and timezone.
 - Exit 6: earlier dates or a skipped prefix are durable; inspect the result before retry.
+- Exit 7: check the configured prose endpoint/model/key environment variable.
+  A provider transport failure is ambiguous and is never hidden by fallback;
+  retry generation only when repeating the provider request is acceptable.
 
 Concurrent scheduled runs remain unsupported because date-cursor scheduling is
 single-owner. Delivery itself takes a nonblocking per-date lock, so a competing
@@ -215,10 +298,12 @@ See [SECURITY.md](SECURITY.md) for token scope, rotation, and private-data flow.
 
 ## Non-goals
 
-v0.1.x has no built-in Hive configuration discovery, LLM content, web UI,
-interactive bot commands,
-multi-chat routing, organization discovery, non-GitHub forge support, or
-long-running scheduler. The build and test process never tags or publishes
+PRDigest has no built-in Hive configuration discovery, autonomous OpenClaw
+installation, provider discovery, prompt-driven fact collection, web UI,
+interactive bot commands, multi-chat routing, organization discovery,
+non-GitHub forge support, or long-running scheduler. The OpenClaw skill and
+standalone provider can write presentation text, but neither may alter or extend
+the canonical facts. The build and test process never tags or publishes
 automatically.
 
 ## License
