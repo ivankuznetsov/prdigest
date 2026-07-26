@@ -138,6 +138,20 @@ prdigest version
 The [published RubyGems version](https://rubygems.org/gems/prdigest) may trail
 the current `main` branch.
 
+### Publishing for maintainers
+
+RubyGems publication uses GitHub OIDC rather than a stored API key. Configure
+the `prdigest` gem's RubyGems trusted publisher with repository owner
+`ivankuznetsov`, repository `prdigest`, workflow `release.yml`, and environment
+`release`.
+
+Pushing a new exact `vX.Y.Z` tag publishes it automatically. To publish an
+existing prepared tag such as `v0.1.1`, run the **Release gem** workflow
+manually and supply that tag. The workflow checks that the immutable tag and
+package version agree, runs the unit and clean-install smoke suites, builds and
+verifies the exact gem, then exchanges GitHub's OIDC identity for a short-lived
+RubyGems credential immediately before `gem push`.
+
 ## Configuration
 
 Lookup is strict: `--config PATH`, then `PRDIGEST_CONFIG`, then an existing
@@ -452,7 +466,8 @@ PRDigest deliberately has no:
 - long-running scheduler.
 
 Agents and providers are presentation adapters; they do not alter or extend the
-canonical facts contract. Build and test never tag or publish automatically.
+canonical facts contract. Ordinary build and test never tag or publish; only
+the explicit exact-tag release workflow can publish.
 
 ## License
 

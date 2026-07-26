@@ -32,3 +32,6 @@
   consent; unsupported Ruby-gem installer metadata is not invented.
 - systemd remains the only scheduler; `serve` is a compatibility stub.
 - Release preparation is reversible and never tags, publishes, or creates a release.
+- RubyGems publication has one explicit authority: the exact-tag `release.yml`
+  workflow. It verifies tag/version identity and tests the tagged package before
+  exchanging GitHub OIDC for a short-lived trusted-publisher credential.
