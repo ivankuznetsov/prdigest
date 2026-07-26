@@ -7,7 +7,7 @@ require "yaml"
 
 class CliTest < Minitest::Test
   def test_exposes_thor_tasks_and_help_switches
-    %w[facts run_cmd serve version].each { |command| assert_includes Prdigest::CLI.tasks.keys, command }
+    %w[facts prose run_cmd serve version].each { |command| assert_includes Prdigest::CLI.tasks.keys, command }
     assert_equal :run_cmd, Prdigest::CLI.send(:map).fetch("run")
 
     [["help"], ["--help"], ["-h"]].each do |argv|
@@ -15,6 +15,198 @@ class CliTest < Minitest::Test
       assert_equal 0, Prdigest::CLI.invoke(argv, out: out, err: StringIO.new)
       assert_match(/Usage: prdigest run/, out.string)
       assert_match(/prdigest facts/, out.string)
+      assert_match(/prdigest prose/, out.string)
+    end
+  end
+
+  def test_prose_stdout_emits_exact_raw_text_with_one_terminal_newline
+    path = write_prose_config(include_telegram: false)
+    captured = nil
+    outcome = Struct.new(:date, :prose, :delivery) {
+      def delivered? = !delivery.nil?
+    }.new(Date.new(2026, 1, 15), "First line\nSecond line\n\n", nil)
+    factory = lambda do |**options|
+      captured = options
+      Struct.new(:outcome) { def call = outcome }.new(outcome)
+    end
+    out = StringIO.new
+    err = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      [
+        "prose", "--config", path, "--date", "2026-01-15",
+        "--repo", "Owner/One", "--repo=other/two"
+      ],
+      out: out,
+      err: err,
+      env: { "GITHUB_TOKEN" => "github", "PROVIDER_KEY" => "provider" },
+      prose_runner_factory: factory
+    )
+
+    assert_equal 0, code
+    assert_equal "First line\nSecond line\n", out.string
+    assert_empty err.string
+    assert_equal false, captured.fetch(:deliver)
+    assert_equal ["Owner/One", "other/two"], captured.fetch(:repositories)
+  end
+
+  def test_prose_delivery_requires_only_telegram_credentials_before_runner
+    path = write_prose_config
+    captured = nil
+    outcome = Struct.new(:date, :prose, :delivery) {
+      def delivered? = !delivery.nil?
+    }.new(
+      Date.new(2026, 1, 15),
+      nil,
+      { accepted_chunks: 2, total_chunks: 2, status: "completed" }
+    )
+    factory = lambda do |**options|
+      captured = options
+      Struct.new(:outcome) { def call = outcome }.new(outcome)
+    end
+    out = StringIO.new
+    err = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      ["prose", "--config", path, "--date", "2026-01-15", "--deliver"],
+      out: out,
+      err: err,
+      env: { "TELEGRAM_BOT_TOKEN" => "telegram" },
+      prose_runner_factory: factory
+    )
+
+    assert_equal 0, code
+    assert_equal "prdigest: prose delivered; date=2026-01-15 chunks=2\n", out.string
+    assert_empty err.string
+    assert_equal true, captured.fetch(:deliver)
+  end
+
+  def test_prose_stdout_requires_github_and_provider_credentials_without_starting_runner
+    path = write_prose_config(include_telegram: false)
+    [
+      [{ "PROVIDER_KEY" => "provider" }, "GitHub token is missing"],
+      [{ "GITHUB_TOKEN" => "github" }, "prose API key environment variable is unset"]
+    ].each do |env, message|
+      out = StringIO.new
+      err = StringIO.new
+
+      code = Prdigest::CLI.invoke(
+        ["prose", "--config", path],
+        out: out,
+        err: err,
+        env: env,
+        prose_runner_factory: ->(**) { flunk "prose runner must not start" }
+      )
+
+      assert_equal 2, code
+      assert_empty out.string
+      assert_includes err.string, message
+    end
+  end
+
+  def test_prose_delivery_requires_telegram_but_defers_generation_credentials
+    path = write_prose_config
+    out = StringIO.new
+    err = StringIO.new
+
+    code = Prdigest::CLI.invoke(
+      ["prose", "--config", path, "--deliver"],
+      out: out,
+      err: err,
+      env: {},
+      prose_runner_factory: ->(**) { flunk "runner must not start without Telegram" }
+    )
+
+    assert_equal 2, code
+    assert_empty out.string
+    assert_includes err.string, "Telegram bot token is missing"
+  end
+
+  def test_prose_rejects_incompatible_options_and_deliver_is_prose_only
+    path = write_prose_config
+
+    %w[--dry-run --json].each do |option|
+      out = StringIO.new
+      err = StringIO.new
+      code = Prdigest::CLI.invoke(
+        ["prose", "--config", path, option],
+        out: out,
+        err: err,
+        env: credentials,
+        prose_runner_factory: ->(**) { flunk "prose runner must not start" }
+      )
+      assert_equal 2, code
+      assert_empty out.string
+      assert_includes err.string, "#{option} is not valid for prose"
+    end
+
+    out = StringIO.new
+    code = Prdigest::CLI.invoke(
+      ["run", "--config", path, "--deliver", "--json"],
+      out: out,
+      err: StringIO.new,
+      env: credentials,
+      runner_factory: ->(**) { flunk "runner must not start" }
+    )
+    assert_equal 2, code
+    assert_equal "cli", JSON.parse(out.string).dig("error", "kind")
+
+    facts_out = StringIO.new
+    code = Prdigest::CLI.invoke(
+      ["facts", "--config", path, "--deliver"],
+      out: facts_out,
+      err: StringIO.new,
+      env: credentials,
+      facts_runner_factory: ->(**) { flunk "facts runner must not start" }
+    )
+    assert_equal 2, code
+    assert_equal "cli", JSON.parse(facts_out.string).dig("error", "kind")
+
+    [["version", "--deliver"], ["help", "--deliver"]].each do |argv|
+      out = StringIO.new
+      err = StringIO.new
+      assert_equal 2, Prdigest::CLI.invoke(argv, out: out, err: err)
+      assert_empty out.string
+      assert_includes err.string, "--deliver is only valid for prose"
+    end
+  end
+
+  def test_prose_maps_typed_failures_without_writing_stdout_or_secrets
+    path = write_prose_config
+    secret = "provider-secret"
+    cases = [
+      [Prdigest::FetchError.new("GitHub unavailable", kind: "github"), 3, "github"],
+      [Prdigest::SendError.new("Telegram unavailable", kind: "telegram"), 4, "telegram"],
+      [Prdigest::StateError.new("checkpoint unavailable"), 5, "state"],
+      [Prdigest::GenerationError.new("provider unavailable", kind: "provider"), 7, "provider"],
+      [Prdigest::GenerationError.new("provider uncertain", kind: "provider_ambiguous"), 7, "provider_ambiguous"],
+      [Prdigest::RenderError.new("blank prose", kind: "prose_render"), 1, "prose_render"],
+      [RuntimeError.new("internal #{secret} details"), 1, "internal"]
+    ]
+
+    cases.each do |failure, expected_code, expected_kind|
+      runner = Object.new
+      runner.define_singleton_method(:call) { raise failure }
+      out = StringIO.new
+      err = StringIO.new
+
+      code = Prdigest::CLI.invoke(
+        ["prose", "--config", path, "--deliver"],
+        out: out,
+        err: err,
+        env: {
+          "TELEGRAM_BOT_TOKEN" => "telegram-secret",
+          "GITHUB_TOKEN" => "github-secret",
+          "PROVIDER_KEY" => secret
+        },
+        prose_runner_factory: ->(**) { runner }
+      )
+
+      assert_equal expected_code, code
+      assert_empty out.string
+      assert_includes err.string, "prdigest: #{expected_kind}:"
+      refute_includes err.string, secret
+      refute_includes err.string, "internal #{secret} details"
     end
   end
 
@@ -270,6 +462,40 @@ class CliTest < Minitest::Test
   end
 
   private
+
+  def credentials
+    {
+      "GITHUB_TOKEN" => "github",
+      "PROVIDER_KEY" => "provider",
+      "TELEGRAM_BOT_TOKEN" => "telegram"
+    }
+  end
+
+  def write_prose_config(include_telegram: true)
+    path = File.join(Dir.mktmpdir, "config.yml")
+    raw = {
+      "timezone" => "UTC",
+      "github" => {
+        "repos" => ["o/r"],
+        "token_env" => "GITHUB_TOKEN"
+      },
+      "prose" => {
+        "provider" => "openai_compatible",
+        "base_url" => "https://provider.example/v1",
+        "model" => "example/model",
+        "api_key_env" => "PROVIDER_KEY"
+      }
+    }
+    if include_telegram
+      raw["telegram"] = {
+        "token_env" => "TELEGRAM_BOT_TOKEN",
+        "chat_id" => 1,
+        "chat_id_allowlist" => [1]
+      }
+    end
+    File.write(path, YAML.dump(raw))
+    path
+  end
 
   def write_config(include_telegram: true)
     path = File.join(Dir.mktmpdir, "config.yml")

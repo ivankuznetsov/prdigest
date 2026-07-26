@@ -204,6 +204,27 @@ class TelegramTest < Minitest::Test
     assert_equal [1], sleeps
   end
 
+  def test_accepts_a_lazy_chunk_factory
+    transport = FakeTransport.new([ok])
+    calls = 0
+
+    Dir.mktmpdir do |root|
+      result = sender(transport: transport).deliver(
+        digest_date: Date.new(2026, 7, 23),
+        checkpoint_store: Prdigest::DeliveryCheckpointStore.new(root: root),
+        scope: ["acme/one"],
+        chunk_factory: -> {
+          calls += 1
+          ["<b>Generated</b>"]
+        }
+      )
+
+      assert_equal 1, calls
+      assert_equal "completed", result.fetch(:status)
+      assert_equal "<b>Generated</b>", JSON.parse(transport.calls.fetch(0)[:request].body).fetch("text")
+    end
+  end
+
   def test_net_http_transport_enforces_tls_and_does_not_follow_redirects
     redirect = Response.new(code: "302", body: "synthetic redirect")
     http = FakeHTTP.new(redirect)

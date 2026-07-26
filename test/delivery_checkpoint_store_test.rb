@@ -47,6 +47,118 @@ class DeliveryCheckpointStoreTest < Minitest::Test
     end
   end
 
+  def test_lazy_factory_is_called_once_and_never_called_for_an_existing_checkpoint
+    with_store do |store, _root|
+      calls = 0
+      store.with_checkpoint(
+        date: DATE,
+        chat_id: 1,
+        scope: ["acme/one"],
+        chunk_factory: -> {
+          calls += 1
+          %w[generated once]
+        }
+      ) do |delivery|
+        assert_equal %w[generated once], delivery.chunks
+      end
+
+      store.with_checkpoint(
+        date: DATE,
+        chat_id: 1,
+        scope: ["acme/one"],
+        chunk_factory: -> { flunk "existing checkpoint must bypass generation" }
+      ) do |delivery|
+        assert_equal %w[generated once], delivery.chunks
+      end
+
+      assert_equal 1, calls
+    end
+  end
+
+  def test_lazy_factory_output_is_persisted_before_delivery_begins
+    with_store do |store, root|
+      store.with_checkpoint(
+        date: DATE,
+        chat_id: 1,
+        scope: ["acme/one"],
+        chunk_factory: -> { ["durable prose"] }
+      ) do |delivery|
+        checkpoint = JSON.parse(File.read(File.join(root, "#{DATE}.json")))
+        assert_equal ["durable prose"], checkpoint.fetch("chunks")
+        assert_equal "pending", checkpoint.fetch("status")
+        assert_equal ["durable prose"], delivery.chunks
+      end
+    end
+  end
+
+  def test_lazy_factory_preserves_domain_error_types_and_creates_no_checkpoint
+    with_store do |store, root|
+      failures = [
+        Prdigest::ConfigError.new("configuration unavailable"),
+        Prdigest::FetchError.new("GitHub unavailable"),
+        Prdigest::GenerationError.new("provider unavailable"),
+        Prdigest::RenderError.new("render unavailable")
+      ]
+
+      failures.each do |failure|
+        error = assert_raises(failure.class) do
+          store.with_checkpoint(
+            date: DATE,
+            chat_id: 1,
+            scope: ["acme/one"],
+            chunk_factory: -> { raise failure }
+          ) { flunk "delivery must not begin" }
+        end
+
+        assert_same failure, error
+        refute File.exist?(File.join(root, "#{DATE}.json"))
+      end
+    end
+  end
+
+  def test_new_checkpoint_requires_exactly_one_payload_source
+    with_store do |store, _root|
+      error = assert_raises(Prdigest::StateError) do
+        store.with_checkpoint(date: DATE, chat_id: 1, scope: ["acme/one"]) { flunk }
+      end
+      assert_match(/exactly one payload source/, error.message)
+    end
+
+    with_store do |store, _root|
+      error = assert_raises(Prdigest::StateError) do
+        store.with_checkpoint(
+          date: DATE,
+          chat_id: 1,
+          scope: ["acme/one"],
+          chunks: ["eager"],
+          chunk_factory: -> { ["lazy"] }
+        ) { flunk }
+      end
+      assert_match(/exactly one payload source/, error.message)
+    end
+  end
+
+  def test_existing_checkpoint_ignores_all_payload_sources
+    with_store do |store, _root|
+      store.with_checkpoint(
+        date: DATE,
+        chat_id: 1,
+        scope: ["acme/one"],
+        chunks: ["stored"]
+      ) { }
+
+      store.with_checkpoint(
+        date: DATE,
+        chat_id: 1,
+        scope: ["acme/one"],
+        chunks: ["regenerated"],
+        chunk_factory: -> { flunk "existing checkpoint must not inspect payload sources" }
+      ) do |delivery|
+        assert_equal ["stored"], delivery.chunks
+      end
+    end
+  end
+
   def test_in_flight_attempt_is_parked_as_ambiguous
     with_store do |store, _root|
       store.with_checkpoint(date: DATE, chat_id: 1, scope: ["acme/one"], chunks: ["one"]) do |delivery|
