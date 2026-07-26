@@ -453,22 +453,6 @@ The test suite is fully offline. Live GitHub and Telegram smokes are manual
 release gates; retain only timestamps and pass/fail status, never credentials,
 response bodies, generated prose, or private titles.
 
-## Non-goals
-
-PRDigest deliberately has no:
-
-- built-in Hive configuration discovery;
-- autonomous OpenClaw installation or provider discovery;
-- prompt-driven fact collection;
-- web UI or interactive bot commands;
-- multi-chat routing or organization discovery;
-- non-GitHub forge support; or
-- long-running scheduler.
-
-Agents and providers are presentation adapters; they do not alter or extend the
-canonical facts contract. Ordinary build and test never tag or publish; only
-the explicit exact-tag release workflow can publish.
-
 ## License
 
 [MIT](LICENSE) © 2026 Ivan Kuznetsov
