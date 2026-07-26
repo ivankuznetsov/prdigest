@@ -1,5 +1,9 @@
 # Known gaps
 
+- RubyGems still needs an owner to register `ivankuznetsov/prdigest`,
+  `release.yml`, and the `release` environment as the gem's trusted publisher.
+  Until that one-time registry authorization exists, the release workflow must
+  fail closed and neither v0.1.1 nor v0.2.0 is remotely publishable through it.
 - GitHub publishes no search-index freshness SLA. The 09:05 host-local timer and
   explicit replay reduce the risk but cannot prove a merge was indexed on time.
 - GitHub search's 1,000-result ceiling is a hard operating limit; PRDigest
