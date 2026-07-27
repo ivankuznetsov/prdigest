@@ -403,21 +403,22 @@ both, copy and paste this prompt into an OpenClaw chat:
 ```text
 Install PRDigest 0.3.0 in the same user/runtime context as OpenClaw with
 `gem install prdigest -v 0.3.0`, then install the ClawHub skill with
-`openclaw skills install @ivankuznetsov/prdigest`. This message explicitly
-authorizes those two installs and only the PATH adjustment needed to make the
-installed `prdigest` executable visible to the OpenClaw runtime. Do not create
-PRDigest configuration files, store credentials, enable Telegram delivery, or
-install a scheduler. First verify Ruby 3.2 or newer is available; if it is not,
-stop and report the exact blocker instead of changing system packages. After
-installation, run `prdigest version`, confirm that OpenClaw can discover the
-installed PRDigest skill, and report the installed paths and versions without
-exposing environment variables or tokens.
+`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. This message
+explicitly authorizes those two installs and only the PATH adjustment needed to
+make the installed `prdigest` executable visible to the OpenClaw runtime. Do
+not create PRDigest configuration files, store credentials, enable Telegram
+delivery, or install a scheduler. First verify Ruby 3.2 or newer is available;
+if it is not, stop and report the exact blocker instead of changing system
+packages. After installation, run `prdigest version`, confirm that OpenClaw can
+discover the installed PRDigest skill, and report the installed paths and
+versions without exposing environment variables or tokens.
 ```
 
 For a manual install, run `gem install prdigest -v 0.3.0` and
-`openclaw skills install @ivankuznetsov/prdigest`. The skill gives an agent
-facts-to-prose behavior only; use the [standalone Telegram bot](#standalone-telegram-bot)
-when PRDigest itself should generate and deliver scheduled prose.
+`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. The skill
+gives an agent facts-to-prose behavior only; use the
+[standalone Telegram bot](#standalone-telegram-bot) when PRDigest itself should
+generate and deliver scheduled prose.
 
 See [`openclaw/README.md`](openclaw/README.md) for local development and
 publication details.

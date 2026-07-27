@@ -18,7 +18,7 @@ The Ruby CLI and ClawHub skill are separate installs. The manual commands are:
 
 ```sh
 gem install prdigest -v 0.3.0
-openclaw skills install @ivankuznetsov/prdigest
+openclaw skills install @ivankuznetsov/prdigest --version 0.3.0
 ```
 
 Or paste this prompt into an OpenClaw chat:
@@ -26,15 +26,15 @@ Or paste this prompt into an OpenClaw chat:
 ```text
 Install PRDigest 0.3.0 in the same user/runtime context as OpenClaw with
 `gem install prdigest -v 0.3.0`, then install the ClawHub skill with
-`openclaw skills install @ivankuznetsov/prdigest`. This message explicitly
-authorizes those two installs and only the PATH adjustment needed to make the
-installed `prdigest` executable visible to the OpenClaw runtime. Do not create
-PRDigest configuration files, store credentials, enable Telegram delivery, or
-install a scheduler. First verify Ruby 3.2 or newer is available; if it is not,
-stop and report the exact blocker instead of changing system packages. After
-installation, run `prdigest version`, confirm that OpenClaw can discover the
-installed PRDigest skill, and report the installed paths and versions without
-exposing environment variables or tokens.
+`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. This message
+explicitly authorizes those two installs and only the PATH adjustment needed to
+make the installed `prdigest` executable visible to the OpenClaw runtime. Do
+not create PRDigest configuration files, store credentials, enable Telegram
+delivery, or install a scheduler. First verify Ruby 3.2 or newer is available;
+if it is not, stop and report the exact blocker instead of changing system
+packages. After installation, run `prdigest version`, confirm that OpenClaw can
+discover the installed PRDigest skill, and report the installed paths and
+versions without exposing environment variables or tokens.
 ```
 
 The skill remains discoverable when the Ruby CLI is absent, but it never
