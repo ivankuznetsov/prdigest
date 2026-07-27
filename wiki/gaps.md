@@ -12,10 +12,6 @@
 - Authenticated GitHub/Telegram smokes and the clean Ubuntu walkthrough require
   operator infrastructure and credentials. Their checklist is documented in the
   README; retain only redacted timestamp/status evidence when performed.
-- The OpenClaw skill is ClawHub-ready source prepared with the v0.3.0 release,
-  not a confirmed live listing. Publication requires separate explicit
-  authorization; exact-version inspection, a clean install comparison, and an
-  authenticated OpenClaw invocation remain unperformed.
 - Live OpenAI-compatible provider behavior is not claimed by the offline suite.
   An authorized smoke still needs to prove one real endpoint/model and verify
   that retained evidence contains no key, private facts, request body, provider

@@ -1,6 +1,6 @@
 # PRDigest OpenClaw skill
 
-PRDigest owns one ClawHub-ready OpenClaw skill. Its canonical local source is
+PRDigest owns one published OpenClaw skill. Its canonical local source is
 [`skills/prdigest/SKILL.md`](skills/prdigest/SKILL.md); the bundle contains no
 Ruby runtime, executable, credentials, or configuration.
 
@@ -8,16 +8,33 @@ The skill invokes only the versioned `prdigest facts` boundary. OpenClaw writes
 the prose itself from that document. It does not invoke PRDigest's provider or
 Telegram paths, or query GitHub directly.
 
-The coordinated source release target is `0.3.0`. ClawHub publication remains a
-separate operator-authorized action after that exact gem is publicly installable.
+The coordinated source release is `0.3.0`. Its
+[`@ivankuznetsov/prdigest`](https://clawhub.ai/ivankuznetsov/skills/prdigest)
+ClawHub listing is published under **Development**.
 
 ## Installation boundary
 
-ClawHub publication is not part of normal build or test work. After a separately
-authorized publication, the expected install command and slug are:
+The Ruby CLI and ClawHub skill are separate installs. The manual commands are:
 
 ```sh
-clawhub install @ivankuznetsov/prdigest
+gem install prdigest -v 0.3.0
+openclaw skills install @ivankuznetsov/prdigest --version 0.3.0
+```
+
+Or paste this prompt into an OpenClaw chat:
+
+```text
+Install PRDigest 0.3.0 in the same user/runtime context as OpenClaw with
+`gem install prdigest -v 0.3.0`, then install the ClawHub skill with
+`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. This message
+explicitly authorizes those two installs and only the PATH adjustment needed to
+make the installed `prdigest` executable visible to the OpenClaw runtime. Do
+not create PRDigest configuration files, store credentials, enable Telegram
+delivery, or install a scheduler. First verify Ruby 3.2 or newer is available;
+if it is not, stop and report the exact blocker instead of changing system
+packages. After installation, run `prdigest version`, confirm that OpenClaw can
+discover the installed PRDigest skill, and report the installed paths and
+versions without exposing environment variables or tokens.
 ```
 
 The skill remains discoverable when the Ruby CLI is absent, but it never
@@ -39,10 +56,10 @@ proof, not local implementation proof.
 
 ## Publish checklist
 
-Publishing is a release action. Do not run any publish command—including a
-dry-run—without a separate explicit release request and version direction. A
-dry-run can still select default version metadata even though it does not
-upload the skill.
+Publishing a future version is a release action. Do not run any publish
+command—including a dry-run—without a separate explicit release request and
+version direction. A dry-run can still select default version metadata even
+though it does not upload the skill.
 
 Only after that authorization:
 
@@ -61,5 +78,5 @@ Only after that authorization:
    bounded digest from a safe test repository without exposing facts or
    credentials in retained logs.
 
-Until those checks pass, describe the source as ClawHub-ready rather than
-published.
+Until those checks pass for a future version, continue to identify `0.3.0` as
+the latest verified publication rather than claiming the new source is live.
