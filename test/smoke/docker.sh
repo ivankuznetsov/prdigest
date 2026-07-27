@@ -3,7 +3,7 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 run_id="$(date +%s)-$$"
-tag="prdigest-smoke:0.2.0-$run_id"
+tag="prdigest-smoke:0.3.0-$run_id"
 volume="prdigest-smoke-$run_id"
 smoke_config=$(mktemp)
 smoke_result=$(mktemp)

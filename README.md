@@ -120,7 +120,7 @@ To build and install the current checkout as a gem without publishing it:
 
 ```sh
 gem build prdigest.gemspec
-gem install prdigest-0.2.0.gem
+gem install prdigest-0.3.0.gem
 prdigest version
 ```
 
