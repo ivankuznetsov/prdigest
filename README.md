@@ -364,16 +364,18 @@ small spend limit.
 
 ### 3. Preview, send once, then schedule
 
-Export the three credentials locally, preview the prose without Telegram, then
-perform the first intentional delivery:
+Read the three credentials without saving them in shell history, preview the
+prose without Telegram, then perform the first intentional delivery:
 
-```sh
-export GITHUB_TOKEN=github_pat_...
-export TELEGRAM_BOT_TOKEN=...
-export OPENROUTER_API_KEY=...
+```bash
+read -rsp "GitHub token: " GITHUB_TOKEN; echo
+read -rsp "Telegram bot token: " TELEGRAM_BOT_TOKEN; echo
+read -rsp "OpenRouter API key: " OPENROUTER_API_KEY; echo
+export GITHUB_TOKEN TELEGRAM_BOT_TOKEN OPENROUTER_API_KEY
 
 prdigest prose --config ./prdigest.yml
 prdigest prose --config ./prdigest.yml --deliver
+unset GITHUB_TOKEN TELEGRAM_BOT_TOKEN OPENROUTER_API_KEY
 ```
 
 Once the one-off send succeeds, use the tested [systemd deployment](#deployment)
