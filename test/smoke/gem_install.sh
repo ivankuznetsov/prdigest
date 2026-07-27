@@ -43,7 +43,7 @@ run_and_show "$tmp/version.out" env -i \
   HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" RUBYOPT= RUBYLIB= \
   prdigest version
-grep -Fq "prdigest 0.2.0" "$tmp/version.out"
+grep -Fq "prdigest 0.3.0" "$tmp/version.out"
 
 env -i HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" RUBYOPT= RUBYLIB= \

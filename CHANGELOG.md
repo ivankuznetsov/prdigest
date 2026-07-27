@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-07-27
 
 - Remove `prdigest run`, deterministic Telegram HTML, schedule/cursor state,
   catch-up processing, the `prdigest-result` envelope, and the `serve` stub.
