@@ -3,7 +3,8 @@
 - Documented the outbound-only Telegram bot setup from BotFather through a
   one-off checkpointed prose delivery and the packaged daily systemd timer.
 - Added a token-safe chat ID lookup and a complete OpenRouter configuration
-  example using `deepseek/deepseek-v4-flash`.
+  example using `deepseek/deepseek-v4-flash`, explicitly identified as a
+  replaceable provider/model example rather than a requirement.
 - Added the same copy-paste OpenClaw prompt to both installation guides. It
   explicitly authorizes only the PRDigest 0.3.0 RubyGems and ClawHub skill
   installs, then verifies both.

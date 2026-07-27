@@ -331,7 +331,7 @@ prdigest version
 ```
 
 Create a private `prdigest.yml` with the repositories, destination chat, and
-provider you want. This example uses OpenRouter and DeepSeek V4 Flash:
+provider you want. This example uses OpenRouter with DeepSeek V4 Flash:
 
 ```yaml
 timezone: Europe/London
@@ -356,6 +356,9 @@ prose:
   model: deepseek/deepseek-v4-flash
   api_key_env: OPENROUTER_API_KEY
 ```
+
+The provider and model above are only an example. Replace them with any
+OpenAI-compatible endpoint and model you prefer.
 
 Replace both chat IDs with the value from step 1. Keep the GitHub, Telegram,
 and provider tokens in environment variables, never in YAML. Use a dedicated
