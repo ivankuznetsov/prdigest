@@ -1,12 +1,6 @@
-# prdigest — multi-repo merged-PR daily digest (Hive-independent)
+# prdigest — merged-PR facts for agents and provider-written prose
 
 timezone: Europe/London
-schedule:
-  # Prefer systemd timer + `prdigest run` for v1.
-  # serve mode may honor this later.
-  cron: "5 9 * * *"
-  # Newest retained catch-up window; valid range is 1..30.
-  max_catchup_days: 7
 
 github:
   token_env: GITHUB_TOKEN
@@ -23,11 +17,9 @@ telegram:
 
 digest:
   line_stats: true
-  send_empty: true
-  empty_message: "Merged PR digest — {date}\nTotal: 0 PRs"
 
 prose:
-  # Used only by `prdigest prose`; `run` and `facts` never contact this endpoint.
+  # Used only by `prdigest prose`; `facts` never contacts this endpoint.
   provider: openai_compatible
   base_url: https://openrouter.ai/api/v1
   # Replace with a model identifier accepted by the configured endpoint.
@@ -36,6 +28,5 @@ prose:
   api_key_env: OPENROUTER_API_KEY
 
 state:
-  path: /var/lib/prdigest/state.json
-  # Stable rendered chunks and next-unsent position, separate from the date cursor.
+  # Stable prose chunks and the next-unsent position.
   delivery_path: /var/lib/prdigest/deliveries

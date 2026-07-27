@@ -54,16 +54,6 @@ env -i HOME="$tmp/home" PATH="$smoke_path" \
       feature && File.realpath(feature).start_with?(gem_root)
   '
 
-run_and_show "$tmp/result.json" env -i \
-  HOME="$tmp/home" PATH="$smoke_path" \
-  GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" \
-  GITHUB_TOKEN=synthetic-smoke-token \
-  RUBYOPT="-r$root/test/support/offline_smoke_stubs.rb" RUBYLIB= \
-  prdigest run --config "$tmp/config/config.yml" --date 2026-01-15 --dry-run --json
-
-grep -Fq '"status":"dry_run"' "$tmp/result.json"
-grep -Fq 'Synthetic packaged Time result' "$tmp/result.json"
-
 run_and_show "$tmp/facts.json" env -i \
   HOME="$tmp/home" PATH="$smoke_path" \
   GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" \
@@ -75,3 +65,14 @@ grep -Fq '"schema":"prdigest-facts"' "$tmp/facts.json"
 grep -Fq '"schema_version":1' "$tmp/facts.json"
 grep -Fq '"status":"success"' "$tmp/facts.json"
 grep -Fq 'Synthetic packaged Time result' "$tmp/facts.json"
+
+run_and_show "$tmp/prose.txt" env -i \
+  HOME="$tmp/home" PATH="$smoke_path" \
+  GEM_HOME="$tmp/gems" GEM_PATH="$tmp/gems" \
+  GITHUB_TOKEN=synthetic-smoke-token \
+  OPENROUTER_API_KEY=synthetic-provider-token \
+  PRDIGEST_SMOKE_PROSE=1 \
+  RUBYOPT="-r$root/test/support/offline_smoke_stubs.rb" RUBYLIB= \
+  prdigest prose --config "$tmp/config/config.yml" --date 2026-01-15
+
+grep -Fxq 'Synthetic provider prose' "$tmp/prose.txt"

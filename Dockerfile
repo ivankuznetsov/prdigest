@@ -17,4 +17,4 @@ RUN bundle config set without development \
 
 USER prdigest
 ENTRYPOINT ["bundle", "exec", "prdigest"]
-CMD ["run", "--config", "/etc/prdigest/config.yml"]
+CMD ["prose", "--config", "/etc/prdigest/config.yml", "--deliver"]

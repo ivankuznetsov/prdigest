@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "cgi"
 
 class ProseRendererTest < Minitest::Test
   def test_rejects_blank_provider_output
@@ -30,18 +29,16 @@ class ProseRendererTest < Minitest::Test
 
     output = renderer.render(text)
 
-    assert_equal text, output.chunks.map { |chunk| CGI.unescapeHTML(chunk) }.join
+    assert_equal text, output.chunks.join
   end
 
-  def test_escapes_html_injection_after_splitting_plain_text
+  def test_keeps_provider_output_as_plain_text
     text = "<b>trusted?</b> & \"quoted\" 'value'"
 
     output = renderer.render(text)
 
     assert_equal "rendered", output.outcome
-    assert_equal CGI.escapeHTML(text), output.chunks.fetch(0)
-    refute_includes output.chunks.fetch(0), "<b>"
-    assert_equal text, output.chunks.map { |chunk| CGI.unescapeHTML(chunk) }.join
+    assert_equal text, output.chunks.fetch(0)
   end
 
   def test_preserves_unicode_and_exact_newlines_across_chunks
@@ -50,9 +47,9 @@ class ProseRendererTest < Minitest::Test
     output = renderer(limit: 7).render(text)
 
     assert_operator output.chunks.length, :>, 1
-    assert_equal text, output.chunks.map { |chunk| CGI.unescapeHTML(chunk) }.join
+    assert_equal text, output.chunks.join
     output.chunks.each do |chunk|
-      assert_operator Prdigest::Renderer.parsed_length(chunk), :<=, 7
+      assert_operator chunk.length, :<=, 7
       assert_predicate chunk, :valid_encoding?
     end
   end
@@ -63,9 +60,9 @@ class ProseRendererTest < Minitest::Test
     output = renderer.render(text)
 
     assert_operator output.chunks.length, :>, 1
-    assert_equal text, output.chunks.map { |chunk| CGI.unescapeHTML(chunk) }.join
+    assert_equal text, output.chunks.join
     output.chunks.each do |chunk|
-      assert_operator Prdigest::Renderer.parsed_length(chunk), :<=, 4_096
+      assert_operator chunk.length, :<=, 4_096
     end
   end
 

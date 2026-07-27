@@ -5,8 +5,8 @@ PRDigest owns one ClawHub-ready OpenClaw skill. Its canonical local source is
 Ruby runtime, executable, credentials, or configuration.
 
 The skill invokes only the versioned `prdigest facts` boundary. OpenClaw writes
-the prose itself from that document. It does not invoke deterministic Telegram
-delivery, PRDigest's optional provider mode, or GitHub directly.
+the prose itself from that document. It does not invoke PRDigest's provider or
+Telegram paths, or query GitHub directly.
 
 The coordinated source release target is `0.2.0`. ClawHub publication remains a
 separate operator-authorized action after that exact gem is publicly installable.

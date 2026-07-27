@@ -4,7 +4,10 @@
 # search and pull-detail reads, then refuses every lower-level HTTP request.
 require "octokit"
 require "net/http"
+require "json"
 require "time"
+
+PrdigestOfflineSmokeResponse = Struct.new(:code, :body)
 
 class Octokit::Client
   def search_issues(query, _options = {})
@@ -37,7 +40,19 @@ class Octokit::Client
 end
 
 class Net::HTTP
-  def request(*)
+  def request(request, *)
+    if ENV["PRDIGEST_SMOKE_PROSE"] == "1"
+      if request.path.end_with?("/chat/completions")
+        return PrdigestOfflineSmokeResponse.new(
+          "200",
+          JSON.generate(choices: [{ message: { content: "Synthetic provider prose" } }])
+        )
+      end
+      if request.path.end_with?("/sendMessage")
+        return PrdigestOfflineSmokeResponse.new("200", JSON.generate(ok: true, result: {}))
+      end
+    end
+
     raise "offline smoke attempted external HTTP"
   end
 end

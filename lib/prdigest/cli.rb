@@ -8,9 +8,15 @@ module Prdigest
   class CLI < Thor
     class ParseError < StandardError; end
 
-    desc "run", "Build and send (or dry-run) a merged-PR digest for one local day"
-    def run_cmd; end
-    map "run" => :run_cmd
+    EXIT_CODES = {
+      "config" => 2, "cli" => 2, "refusal" => 2,
+      "github" => 3,
+      "telegram" => 4, "telegram_refused" => 4, "telegram_permanent" => 4,
+      "telegram_ambiguous" => 4, "delivery_checkpoint" => 4,
+      "delivery_checkpoint_permanent" => 4,
+      "state" => 5,
+      "provider" => 7, "provider_ambiguous" => 7
+    }.freeze
 
     desc "facts", "Print deterministic merged-PR facts as JSON"
     def facts; end
@@ -21,14 +27,10 @@ module Prdigest
     desc "version", "Print version"
     def version; end
 
-    desc "serve", "Compatibility stub; use the systemd timer"
-    def serve; end
-
     class << self
       def invoke(argv = ARGV, out: $stdout, err: $stderr, env: ENV,
-                 system_path: "/etc/prdigest/config.yml", runner_factory: nil,
-                 facts_runner_factory: nil, prose_runner_factory: nil)
-        json_intent = Array(argv).any? { |arg| arg == "--json" || arg.start_with?("--json=") }
+                 system_path: "/etc/prdigest/config.yml", facts_runner_factory: nil,
+                 prose_runner_factory: nil)
         intent = command_intent(argv)
         facts_intent = intent == "facts"
         prose_intent = intent == "prose"
@@ -38,17 +40,11 @@ module Prdigest
         raise ParseError, "--help is not valid for facts" if facts_intent && parsed[:command] == "help"
         return print_help(out) if %w[help --help -h].include?(parsed[:command])
 
-        unless %w[facts prose run serve].include?(parsed[:command])
-          raise ParseError, "unknown command"
-        end
+        raise ParseError, "unknown command" unless %w[facts prose].include?(parsed[:command])
 
         path = Config.resolve_path(explicit: parsed[:config], env: env, system_path: system_path)
         capability = config_capability(parsed)
         config = Config.load(path, capability: capability)
-        if parsed[:command] == "serve"
-          err.puts "prdigest serve: not implemented — use systemd timer + `prdigest run`"
-          return 0
-        end
 
         validate_date!(parsed[:date]) if parsed[:date]
         repositories = if parsed[:repos].empty?
@@ -91,36 +87,16 @@ module Prdigest
           present_prose(outcome, out: out)
           return 0
         end
-
-        raise ConfigError, "GitHub token is missing" if config.github_token(env).empty?
-        if !parsed[:dry_run] && config.telegram_token(env).empty?
-          raise ConfigError, "Telegram bot token is missing"
-        end
-
-        factory = runner_factory || ->(**options) { Runner.new(**options) }
-        result = factory.call(
-          config: config,
-          date: parsed[:date],
-          dry_run: parsed[:dry_run],
-          repositories: repositories,
-          env: env
-        ).call
-        present(result, json: parsed[:json], out: out, err: err)
-        result.exit_code
       rescue ParseError => e
         return present_facts_failure(out, "cli", e.message) if facts_intent
         return present_prose_failure(err, "cli", e.message) if prose_intent
 
-        result = Result.failure(mode: "scheduled", error_kind: "cli", message: e.message)
-        present(result, json: json_intent, out: out, err: err)
-        result.exit_code
+        present_cli_failure(err, "cli", e.message)
       rescue ConfigError => e
         return present_facts_failure(out, "config", e.message) if facts_intent
         return present_prose_failure(err, "config", safe_prose_message(e, config: config, env: env)) if prose_intent
 
-        result = Result.failure(mode: parsed && parsed[:date] ? "explicit_date_replay" : "scheduled", error_kind: "config", message: e.message)
-        present(result, json: parsed ? parsed[:json] : json_intent, out: out, err: err)
-        result.exit_code
+        present_cli_failure(err, "config", e.message)
       rescue StandardError => e
         if facts_intent
           kind = e.is_a?(FetchError) ? e.kind : "internal"
@@ -133,13 +109,7 @@ module Prdigest
           return present_prose_failure(err, kind, message)
         end
 
-        result = Result.failure(
-          mode: parsed && parsed[:date] ? "explicit_date_replay" : "scheduled",
-          error_kind: "internal",
-          message: "unexpected CLI failure (#{e.class})"
-        )
-        present(result, json: parsed ? parsed[:json] : json_intent, out: out, err: err)
-        result.exit_code
+        present_cli_failure(err, "internal", "unexpected CLI failure (#{e.class})")
       end
 
       alias start invoke
@@ -242,13 +212,12 @@ module Prdigest
         case parsed.fetch(:command)
         when "facts" then :facts
         when "prose" then parsed[:deliver] ? :prose_delivery : :prose
-        else :run
         end
       end
 
       def present_facts_failure(out, error_kind, message)
         out.puts JSON.generate(Facts.failure(error_kind: error_kind, message: message))
-        Result::EXIT_CODES.fetch(error_kind.to_s, 1)
+        EXIT_CODES.fetch(error_kind.to_s, 1)
       end
 
       def present_prose(outcome, out:)
@@ -265,7 +234,12 @@ module Prdigest
 
       def present_prose_failure(err, error_kind, message)
         err.puts "prdigest: #{error_kind}: #{message}"
-        Result::EXIT_CODES.fetch(error_kind.to_s, 1)
+        EXIT_CODES.fetch(error_kind.to_s, 1)
+      end
+
+      def present_cli_failure(err, error_kind, message)
+        err.puts "prdigest: #{error_kind}: #{message}"
+        EXIT_CODES.fetch(error_kind.to_s, 1)
       end
 
       def prose_error_kind(error)
@@ -293,39 +267,15 @@ module Prdigest
         end
       end
 
-      def present(result, json:, out:, err:)
-        if json
-          out.puts JSON.generate(result.to_h)
-        elsif result.exit_code.zero?
-          if result.status == "dry_run"
-            out.puts result.chunks.join("\n\n")
-          else
-            out.puts "prdigest: success; settled=#{result.settled_days.length} skipped=#{result.skipped_days.length}"
-          end
-        else
-          if result.status == "partial_failure"
-            err.puts "prdigest: progress; settled=#{human_dates(result.settled_days)} " \
-                     "skipped=#{human_dates(result.skipped_days)} remaining=#{human_dates(result.remaining_days)}"
-          end
-          err.puts "prdigest: #{result.error[:kind]}: #{result.error[:message]}"
-        end
-      end
-
-      def human_dates(dates)
-        values = Array(dates)
-        values.empty? ? "none" : values.join(",")
-      end
-
       def print_version(out)
         out.puts "prdigest #{VERSION}"
         0
       end
 
       def print_help(out)
-        out.puts "Usage: prdigest run [--config PATH] [--date YYYY-MM-DD] [--repo owner/name] [--dry-run] [--json]"
-        out.puts "       prdigest facts [--config PATH] [--date YYYY-MM-DD] [--repo owner/name]"
+        out.puts "Usage: prdigest facts [--config PATH] [--date YYYY-MM-DD] [--repo owner/name]"
         out.puts "       prdigest prose [--config PATH] [--date YYYY-MM-DD] [--repo owner/name] [--deliver]"
-        out.puts "       prdigest serve | version"
+        out.puts "       prdigest version"
         0
       end
     end
