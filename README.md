@@ -19,6 +19,7 @@
 <p>
   <a href="#quick-start">Quick start</a> ·
   <a href="#choose-a-mode">Choose a mode</a> ·
+  <a href="#standalone-telegram-bot">Telegram bot</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="#deployment">Deploy</a> ·
   <a href="#openclaw">OpenClaw</a>
@@ -286,9 +287,106 @@ does not maintain a catch-up cursor: explicitly run missed dates with `--date`.
 
 </details>
 
+## Standalone Telegram bot
+
+This path creates an outbound bot that posts one provider-written digest per
+day. It does not listen for Telegram commands; scheduling is owned by systemd,
+and every send uses `prdigest prose --deliver`.
+
+### 1. Create the bot and destination
+
+1. Open Telegram's official `@BotFather`, run `/newbot`, and keep the returned
+   token private.
+2. For a direct message, open the new bot and send `/start`. For a group, add
+   the bot and send a command such as `/start@your_bot_name` in that group.
+3. Read the destination chat ID from Telegram without putting the token in the
+   command line or browser history:
+
+   ```bash
+   read -rsp "Telegram bot token: " TELEGRAM_BOT_TOKEN
+   echo
+   export TELEGRAM_BOT_TOKEN
+   ruby -rjson -rnet/http -e '
+     uri = URI("https://api.telegram.org/bot#{ENV.fetch("TELEGRAM_BOT_TOKEN")}/getUpdates")
+     updates = JSON.parse(Net::HTTP.get(uri)).fetch("result", [])
+     keys = %w[message edited_message channel_post edited_channel_post my_chat_member chat_member]
+     chats = updates.filter_map { |update| keys.filter_map { |key| update.dig(key, "chat") }.first }
+     chats.uniq { |chat| chat.fetch("id") }.each do |chat|
+       puts [chat.fetch("id"), chat["title"] || chat["username"] || chat["first_name"]].compact.join("\t")
+     end
+   '
+   unset TELEGRAM_BOT_TOKEN
+   ```
+
+If no ID appears, send the bot another command and repeat the lookup. Direct
+chat IDs are normally positive; groups and channels normally use negative IDs.
+
+### 2. Install and configure PRDigest
+
+Install the released gem:
+
+```sh
+gem install prdigest -v 0.3.0
+prdigest version
+```
+
+Create a private `prdigest.yml` with the repositories, destination chat, and
+provider you want. This example uses OpenRouter and DeepSeek V4 Flash:
+
+```yaml
+timezone: Europe/London
+
+github:
+  token_env: GITHUB_TOKEN
+  repos:
+    - owner/api
+    - owner/web
+
+digest:
+  line_stats: true
+
+telegram:
+  token_env: TELEGRAM_BOT_TOKEN
+  chat_id_allowlist: [-1001234567890]
+  chat_id: -1001234567890
+
+prose:
+  provider: openai_compatible
+  base_url: https://openrouter.ai/api/v1
+  model: deepseek/deepseek-v4-flash
+  api_key_env: OPENROUTER_API_KEY
+```
+
+Replace both chat IDs with the value from step 1. Keep the GitHub, Telegram,
+and provider tokens in environment variables, never in YAML. Use a dedicated
+bot token, a read-only fine-grained GitHub token, and a provider key with a
+small spend limit.
+
+### 3. Preview, send once, then schedule
+
+Export the three credentials locally, preview the prose without Telegram, then
+perform the first intentional delivery:
+
+```sh
+export GITHUB_TOKEN=github_pat_...
+export TELEGRAM_BOT_TOKEN=...
+export OPENROUTER_API_KEY=...
+
+prdigest prose --config ./prdigest.yml
+prdigest prose --config ./prdigest.yml --deliver
+```
+
+Once the one-off send succeeds, use the tested [systemd deployment](#deployment)
+below. Its timer runs at `09:05` in the host timezone and sends the previous
+day's digest. Change `OnCalendar` before enabling the timer if you want another
+time. Re-running a completed date is a no-op; use `--date YYYY-MM-DD` for an
+explicit missed day.
+
 ## OpenClaw
 
-The repository includes a ClawHub-ready skill at
+The repository includes the published ClawHub skill
+[`@ivankuznetsov/prdigest`](https://clawhub.ai/ivankuznetsov/skills/prdigest)
+under **Development**, with its source at
 [`openclaw/skills/prdigest/SKILL.md`](openclaw/skills/prdigest/SKILL.md). It:
 
 - invokes only `prdigest facts`;
@@ -297,37 +395,60 @@ The repository includes a ClawHub-ready skill at
 - makes no second GitHub request; and
 - never invokes delivery or configures a prose provider.
 
-The skill is source-ready, **not claimed as published**. After a separately
-authorized ClawHub release, the expected command is:
+The Ruby CLI and ClawHub skill are separate installs. To let OpenClaw install
+both, copy and paste this prompt into an OpenClaw chat:
 
-```sh
-clawhub install @ivankuznetsov/prdigest
+```text
+Install PRDigest 0.3.0 in the same user/runtime context as OpenClaw with
+`gem install prdigest -v 0.3.0`, then install the ClawHub skill with
+`openclaw skills install @ivankuznetsov/prdigest`. This message explicitly
+authorizes those two installs and only the PATH adjustment needed to make the
+installed `prdigest` executable visible to the OpenClaw runtime. Do not create
+PRDigest configuration files, store credentials, enable Telegram delivery, or
+install a scheduler. First verify Ruby 3.2 or newer is available; if it is not,
+stop and report the exact blocker instead of changing system packages. After
+installation, run `prdigest version`, confirm that OpenClaw can discover the
+installed PRDigest skill, and report the installed paths and versions without
+exposing environment variables or tokens.
 ```
 
-ClawHub installation and Ruby CLI installation are separate trust boundaries.
-See [`openclaw/README.md`](openclaw/README.md) for local use and the
-release-gated publication checklist.
+For a manual install, run `gem install prdigest -v 0.3.0` and
+`openclaw skills install @ivankuznetsov/prdigest`. The skill gives an agent
+facts-to-prose behavior only; use the [standalone Telegram bot](#standalone-telegram-bot)
+when PRDigest itself should generate and deliver scheduled prose.
+
+See [`openclaw/README.md`](openclaw/README.md) for local development and
+publication details.
 
 ## Deployment
 
 <details open>
-<summary><strong>systemd on Ubuntu</strong></summary>
+<summary><strong>systemd on Linux</strong></summary>
 
-Install Ruby, `tzdata`, and the gem, then:
+Install Ruby 3.2 or newer and `tzdata`, then install the gem system-wide. The
+gem contains the example configuration and tested service units, so a source
+checkout is not required:
 
 ```sh
-sudo useradd --system --home /nonexistent --shell /usr/sbin/nologin prdigest
+sudo gem install prdigest -v 0.3.0 --no-document --bindir /usr/local/bin
+gem_root=$(ruby -e 'print Gem::Specification.find_by_name("prdigest", "0.3.0").full_gem_path')
+
+sudo useradd --system --home /nonexistent --shell "$(command -v nologin)" prdigest
 sudo install -d -o root -g prdigest -m 0750 /etc/prdigest
-sudo install -o root -g prdigest -m 0640 configs/config.example.yml /etc/prdigest/config.yml
-sudo install -o root -g root -m 0600 .env.example /etc/prdigest/.env
-sudo install -o root -g root -m 0644 scripts/systemd/prdigest.service /etc/systemd/system/
-sudo install -o root -g root -m 0644 scripts/systemd/prdigest.timer /etc/systemd/system/
+sudo install -o root -g prdigest -m 0640 "$gem_root/configs/config.example.yml" /etc/prdigest/config.yml
+sudo install -o root -g root -m 0600 /dev/null /etc/prdigest/.env
+sudo install -o root -g root -m 0644 "$gem_root/scripts/systemd/prdigest.service" /etc/systemd/system/
+sudo install -o root -g root -m 0644 "$gem_root/scripts/systemd/prdigest.timer" /etc/systemd/system/
 sudoedit /etc/prdigest/config.yml
 sudoedit /etc/prdigest/.env
 sudo systemctl daemon-reload
 sudo systemctl start prdigest.service
 sudo systemctl enable --now prdigest.timer
 ```
+
+Put `GITHUB_TOKEN=...`, `TELEGRAM_BOT_TOKEN=...`, and the configured provider
+key such as `OPENROUTER_API_KEY=...` in `/etc/prdigest/.env`. Do not prefix
+systemd environment-file entries with `export`.
 
 systemd creates `/var/lib/prdigest` as `prdigest:prdigest` mode `0700`.
 
