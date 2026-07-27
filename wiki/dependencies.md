@@ -12,7 +12,10 @@ configuration. It adds no provider SDK dependency and is never constructed by
 The OpenClaw integration is a text-only `SKILL.md` bundle owned by this
 repository. ClawHub distributes that bundle separately from RubyGems; the bundle
 contains no executable runtime and cannot install the Ruby gem through
-unsupported installer metadata.
+unsupported installer metadata. The two registries have independent version
+histories: installation pins the intended Ruby gem release while ClawHub
+resolves its current skill unless an independently selected skill version is
+required.
 
 Minitest, Rake, and WebMock are development-only. WebMock disables external
 connections for every automated test. Linux/container deployments require the

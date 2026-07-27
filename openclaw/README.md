@@ -8,9 +8,10 @@ The skill invokes only the versioned `prdigest facts` boundary. OpenClaw writes
 the prose itself from that document. It does not invoke PRDigest's provider or
 Telegram paths, or query GitHub directly.
 
-The coordinated source release is `0.3.0`. Its
+The Ruby gem and ClawHub skill have independent version histories. The current
+Ruby release is `0.3.0`; the
 [`@ivankuznetsov/prdigest`](https://clawhub.ai/ivankuznetsov/skills/prdigest)
-ClawHub listing is published under **Development**.
+skill is published separately under **Development**.
 
 ## Installation boundary
 
@@ -18,7 +19,7 @@ The Ruby CLI and ClawHub skill are separate installs. The manual commands are:
 
 ```sh
 gem install prdigest -v 0.3.0
-openclaw skills install @ivankuznetsov/prdigest --version 0.3.0
+openclaw skills install @ivankuznetsov/prdigest
 ```
 
 Or paste this prompt into an OpenClaw chat:
@@ -26,7 +27,7 @@ Or paste this prompt into an OpenClaw chat:
 ```text
 Install PRDigest 0.3.0 in the same user/runtime context as OpenClaw with
 `gem install prdigest -v 0.3.0`, then install the ClawHub skill with
-`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. This message
+`openclaw skills install @ivankuznetsov/prdigest`. This message
 explicitly authorizes those two installs and only the PATH adjustment needed to
 make the installed `prdigest` executable visible to the OpenClaw runtime. Do
 not create PRDigest configuration files, store credentials, enable Telegram
@@ -66,17 +67,26 @@ Only after that authorization:
 1. Confirm the requested immutable skill version and the reviewed commit.
 2. Confirm a released PRDigest gem containing `prdigest facts` is installable.
 3. Run the full offline suite and packaged-gem smoke on the exact commit.
-4. Authenticate with `clawhub login` and confirm the owner with
-   `clawhub whoami`.
+4. Authenticate with `npm exec --yes clawhub@latest -- login`, then run
+   `npm exec --yes clawhub@latest -- whoami` and confirm it reports the
+   intended owner.
 5. Publish exactly the absolute `openclaw/skills/prdigest` directory with
-   `clawhub skill publish <absolute-path>` and the separately authorized owner,
-   slug, and version. Do not publish the parent `openclaw` directory.
-6. Wait until the exact version is inspectable, install
-   `@ivankuznetsov/prdigest` into a clean temporary workspace, and compare its
-   `SKILL.md` byte-for-byte with the reviewed source.
-7. Run an authenticated OpenClaw smoke that discovers the skill and produces a
+   `npm exec --yes clawhub@latest -- skill publish <absolute-path>` and the
+   separately authorized owner, slug, and version. Do not publish the parent
+   `openclaw` directory.
+6. Wait until
+   `npm exec --yes clawhub@latest -- inspect prdigest --versions --limit 10 --json`
+   lists the requested skill version. Then run
+   `npm exec --yes clawhub@latest -- inspect prdigest --version <skill-version> --file SKILL.md --json`
+   and require `owner.handle` to be `ivankuznetsov`, `skill.slug` to be
+   `prdigest`, `version.version` to match the requested skill version,
+   `version.security.status` to be `clean`, and `file.content` to be
+   byte-for-byte identical to the reviewed `SKILL.md`.
+7. Install `@ivankuznetsov/prdigest` into a clean temporary workspace and
+   confirm OpenClaw discovers the installed skill.
+8. Run an authenticated OpenClaw smoke that discovers the skill and produces a
    bounded digest from a safe test repository without exposing facts or
    credentials in retained logs.
 
-Until those checks pass for a future version, continue to identify `0.3.0` as
-the latest verified publication rather than claiming the new source is live.
+Treat authenticated ClawHub inspection as the authority for the latest verified
+skill publication. Do not infer the skill version from the Ruby gem version.

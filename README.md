@@ -400,13 +400,15 @@ under **Development**, with its source at
 - makes no second GitHub request; and
 - never invokes delivery or configures a prose provider.
 
-The Ruby CLI and ClawHub skill are separate installs. To let OpenClaw install
-both, copy and paste this prompt into an OpenClaw chat:
+The Ruby CLI and ClawHub skill are separate installs with independent version
+histories. Pin the Ruby gem release you want, but let ClawHub resolve the
+current skill. To let OpenClaw install both, copy and paste this prompt into an
+OpenClaw chat:
 
 ```text
 Install PRDigest 0.3.0 in the same user/runtime context as OpenClaw with
 `gem install prdigest -v 0.3.0`, then install the ClawHub skill with
-`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. This message
+`openclaw skills install @ivankuznetsov/prdigest`. This message
 explicitly authorizes those two installs and only the PATH adjustment needed to
 make the installed `prdigest` executable visible to the OpenClaw runtime. Do
 not create PRDigest configuration files, store credentials, enable Telegram
@@ -418,8 +420,8 @@ versions without exposing environment variables or tokens.
 ```
 
 For a manual install, run `gem install prdigest -v 0.3.0` and
-`openclaw skills install @ivankuznetsov/prdigest --version 0.3.0`. The skill
-gives an agent facts-to-prose behavior only; use the
+`openclaw skills install @ivankuznetsov/prdigest`. The skill gives an agent
+facts-to-prose behavior only; use the
 [standalone Telegram bot](#standalone-telegram-bot) when PRDigest itself should
 generate and deliver scheduled prose.
 
