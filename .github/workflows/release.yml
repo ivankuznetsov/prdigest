@@ -100,6 +100,12 @@ jobs:
           except urllib.error.HTTPError as error:
               print("RubyGems exchange HTTP " + str(error.code))
               print("Response content type: " + str(error.headers.get("Content-Type")))
+              body = json.loads(error.read())
+              for key in ("error", "message", "errors"):
+                  if key in body:
+                      message = json.dumps(body[key]).replace(token, "<redacted>")
+                      message = message.replace(os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"], "<redacted>")
+                      print("RubyGems " + key + ": " + message[:2000])
 
       - name: Publish exact gem
         run: gem push "pkg/prdigest-${GEM_VERSION}.gem"
