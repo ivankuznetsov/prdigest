@@ -60,6 +60,17 @@ class OpenclawSkillTest < Minitest::Test
     assert_match(/separately quoted/i, body)
   end
 
+  def test_skill_requires_the_shared_editorial_markdown_shape
+    _, body = read_skill
+
+    assert_includes body, "#` title naming the accepted\ndate"
+    assert_includes body, "##` project or topic headings"
+    assert_match(/one or two short sentences/i, body)
+    assert_match(/clickable full source\nPR links/i, body)
+    assert_match(/custom HTML/i, body)
+    assert_match(/250 to 400 words/i, body)
+  end
+
   private
 
   def read_skill

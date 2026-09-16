@@ -26,12 +26,13 @@ class FactsRunnerTest < Minitest::Test
       @requests = []
     end
 
-    def fetch(date:, window:, repositories:, line_stats:)
+    def fetch(date:, window:, repositories:, line_stats:, include_evidence:)
       @requests << {
         date: date,
         window: window,
         repositories: repositories,
-        line_stats: line_stats
+        line_stats: line_stats,
+        include_evidence: include_evidence
       }
       Prdigest::DayDigest.build(
         date: date,

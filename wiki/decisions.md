@@ -14,6 +14,18 @@
   allowlisted Telegram chat.
 - AI is presentation over untrusted facts, never a facts source. Provider
   failures are visible with exit 7 and do not silently fall back.
+- Pull-request prose receives bounded descriptions and relevant file patches
+  from the canonical collector. Every bound is explicit in facts metadata;
+  generators must never claim that supplied evidence is a complete diff.
+- `Document.generate(facts:, generator:)` is the provider-free reusable prose
+  interface. The CLI's configured provider and Telegram delivery are adapters
+  around it, so an embedding runtime can use the same prompt without an API key
+  or delivery side effect.
+- The shared writing contract returns one concise editorial Markdown document:
+  a dated title, grouped user-facing themes, and full clickable PR links.
+- Prompt limits retain every PR reference, title, and description, trim patch
+  evidence first with explicit metadata, and fail clearly if metadata alone is
+  too large.
 - Remote provider credentials and facts cross only HTTPS; plaintext HTTP is
   restricted to exact loopback hosts. Generated terminal controls are rejected
   before prose can reach stdout, checkpoints, or Telegram.

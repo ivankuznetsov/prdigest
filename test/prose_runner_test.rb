@@ -29,12 +29,13 @@ class ProseRunnerTest < Minitest::Test
       @calls = []
     end
 
-    def fetch(date:, window:, repositories:, line_stats:)
+    def fetch(date:, window:, repositories:, line_stats:, include_evidence:)
       @calls << {
         date: date,
         window: window,
         repositories: repositories,
-        line_stats: line_stats
+        line_stats: line_stats,
+        include_evidence: include_evidence
       }
       Prdigest::DayDigest.build(
         date: date,
@@ -221,9 +222,9 @@ class ProseRunnerTest < Minitest::Test
         telegram_factory: -> { telegram }
       )
 
-      error = assert_raises(Prdigest::RenderError) { instance.call }
+      error = assert_raises(Prdigest::GenerationError) { instance.call }
 
-      assert_equal "prose_render", error.kind
+      assert_equal "provider", error.kind
       assert_empty telegram.network_sends
       refute File.exist?(File.join(root, "prose", "#{DATE}.json"))
     end

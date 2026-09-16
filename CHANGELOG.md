@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2026-09-16
+
+- Add bounded PR descriptions and relevant patches to facts, plus the reusable
+  provider-free `Prdigest::Document` generation boundary for embedders.
+- Generate one concise editorial Markdown digest with dated and grouped
+  headings, user-facing outcomes, and clickable source PR links.
+- Canonicalize renamed repository aliases before collection and deduplicate
+  repeated repository configuration.
+
 ## 0.3.0 - 2026-07-27
 
 - Remove `prdigest run`, deterministic Telegram HTML, schedule/cursor state,

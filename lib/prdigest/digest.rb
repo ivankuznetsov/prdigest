@@ -5,9 +5,11 @@ require "date"
 module Prdigest
   PullRequest = Data.define(
     :repository, :number, :title, :url, :author, :merged_at,
-    :additions, :deletions, :commits
+    :additions, :deletions, :commits, :description, :description_truncated,
+    :patches, :patches_omitted
   ) do
-    def initialize(repository:, number:, title:, url:, author:, merged_at:, additions: nil, deletions: nil, commits: nil)
+    def initialize(repository:, number:, title:, url:, author:, merged_at:, additions: nil, deletions: nil, commits: nil,
+                   description: "", description_truncated: false, patches: [], patches_omitted: 0)
       super(
         repository: repository.to_s.freeze,
         number: Integer(number),
@@ -17,7 +19,11 @@ module Prdigest
         merged_at: merged_at.utc.freeze,
         additions: additions && Integer(additions),
         deletions: deletions && Integer(deletions),
-        commits: commits && Integer(commits)
+        commits: commits && Integer(commits),
+        description: description.to_s.freeze,
+        description_truncated: description_truncated == true,
+        patches: Array(patches).map { |patch| patch.transform_keys(&:to_sym).freeze }.freeze,
+        patches_omitted: Integer(patches_omitted)
       )
     end
   end

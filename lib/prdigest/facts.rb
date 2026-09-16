@@ -69,7 +69,11 @@ module Prdigest
         merged_at: pull.merged_at.utc.iso8601,
         additions: pull.additions,
         deletions: pull.deletions,
-        commits: pull.commits
+        commits: pull.commits,
+        description: pull.description,
+        description_truncated: pull.description_truncated,
+        patches: pull.patches,
+        patches_omitted: pull.patches_omitted
       }
     end
   end

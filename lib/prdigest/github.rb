@@ -8,6 +8,10 @@ module Prdigest
   class GitHub
     SEARCH_CAP = 1_000
     MAX_ATTEMPTS = 3
+    MAX_DESCRIPTION_CHARS = 4_000
+    MAX_PATCH_FILES = 20
+    MAX_PATCH_CHARS = 6_000
+    MAX_PATCH_SCAN_FILES = 100
 
     def initialize(token:, client: nil, sleeper: ->(seconds) { sleep(seconds) }, now: -> { Time.now.to_i })
       @token = token.to_s
@@ -16,9 +20,15 @@ module Prdigest
       @now = now
     end
 
-    def fetch(date:, window:, repositories:, line_stats: false)
+    def fetch(date:, window:, repositories:, line_stats: false, include_evidence: true)
+      unless repositories.empty? || window.zero_length?
+        repositories = Config.normalize_repos(repositories.map do |repository|
+          response = request(repository, date) { @client.repository(repository) }
+          field(response, :full_name)
+        end)
+      end
       pulls = repositories.flat_map do |repository|
-        fetch_repository(repository, date, window, line_stats)
+        fetch_repository(repository, date, window, line_stats, include_evidence)
       end
       DayDigest.build(date: date, repository_order: repositories, pulls: pulls, line_stats: line_stats)
     end
@@ -45,7 +55,7 @@ module Prdigest
       %w[Faraday::Request::Retry Faraday::Retry::Middleware].include?(middleware.name)
     end
 
-    def fetch_repository(repository, date, window, line_stats)
+    def fetch_repository(repository, date, window, line_stats, include_evidence)
       return [] if window.zero_length?
 
       query = build_query(repository, window)
@@ -74,16 +84,24 @@ module Prdigest
         page += 1
       end
 
-      mapped = items.map { |item| map_item(item, repository, date, window) }
-      return mapped unless line_stats
+      return items.map { |item| map_item(item, repository, date, window) } unless include_evidence || line_stats
 
-      mapped.map do |pull|
+      items.map do |item|
+        pull = map_item(item, repository, date, window)
         detail = request(repository, date) { @client.pull_request(repository, pull.number) }
+        description, description_truncated = include_evidence ?
+          bounded_text(optional_field(detail, :body), MAX_DESCRIPTION_CHARS) : ["", false]
+        patches, patches_omitted = include_evidence ?
+          fetch_patches(repository, pull.number, detail, date) : [[], 0]
         PullRequest.new(
           **pull.to_h,
-          additions: Integer(field(detail, :additions)),
-          deletions: Integer(field(detail, :deletions)),
-          commits: Integer(field(detail, :commits))
+          additions: line_stats ? Integer(field(detail, :additions)) : nil,
+          deletions: line_stats ? Integer(field(detail, :deletions)) : nil,
+          commits: line_stats ? Integer(field(detail, :commits)) : nil,
+          description: description,
+          description_truncated: description_truncated,
+          patches: patches,
+          patches_omitted: patches_omitted
         )
       end
     rescue FetchError
@@ -116,6 +134,40 @@ module Prdigest
         author: field(field(item, :user), :login),
         merged_at: merged_at
       )
+    end
+
+    def fetch_patches(repository, number, detail, date)
+      files = Array(request(repository, date) {
+        @client.pull_request_files(repository, number, per_page: MAX_PATCH_SCAN_FILES)
+      })
+      included = files.sort_by { |file| [patch_priority(field(file, :filename)), field(file, :filename).to_s] }
+                      .first(MAX_PATCH_FILES).map do |file|
+        source_patch = optional_field(file, :patch)
+        patch, truncated = bounded_text(source_patch, MAX_PATCH_CHARS)
+        {
+          path: field(file, :filename).to_s,
+          patch: patch,
+          truncated: truncated,
+          omitted: source_patch.nil?
+        }
+      end
+      changed_files = Integer(field(detail, :changed_files))
+      [included, [changed_files - included.length, 0].max]
+    end
+
+    def patch_priority(path)
+      name = path.to_s.downcase
+      return 2 if name.end_with?(".lock") || %w[gemfile.lock package-lock.json yarn.lock pnpm-lock.yaml].include?(name) ||
+                  name.start_with?("vendor/", "dist/", "coverage/", "tmp/") || name.end_with?(".min.js", ".map")
+
+      0
+    end
+
+    def bounded_text(value, limit)
+      text = value.to_s
+      return [text, false] if text.length <= limit
+
+      [text[0, limit], true]
     end
 
     def parse_time(value)

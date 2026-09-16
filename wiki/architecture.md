@@ -9,11 +9,26 @@ service.
 
 `FactsRunner` serializes one explicit date or yesterday as `prdigest-facts`
 schema version 1. It bypasses Telegram, delivery state, and providers.
-`ProseRunner` passes that exact facts document to an `OpenAICompatible` Chat
-Completions client, then returns plain text or delivers it when `--deliver` is
-explicit. Remote providers require HTTPS, plaintext HTTP is loopback-only, and
-generated C0/C1 terminal controls are rejected before stdout or delivery.
+Repository names are resolved through GitHub before searching, so renamed
+repositories and duplicate aliases use one canonical name. Each merged PR is enriched through GitHub's detail and files endpoints before
+facts are exposed. Descriptions, per-file patches, and file counts are bounded;
+the facts document records `description_truncated`, per-patch `truncated` or
+`omitted`, and `patches_omitted`, so a consumer cannot mistake the evidence for
+a complete diff. `Document.generate(facts:, generator:)` is the reusable generation
+boundary: it validates the injected generator's output and needs neither
+configuration nor credentials. Generators use `Document.prompt` or its shared
+system-message and facts helpers for the concise editorial Markdown contract:
+a dated title, grouped headings, user outcomes, and clickable source PR links.
+`ProseRunner` passes that exact facts document through this
+boundary to an `OpenAICompatible` Chat Completions client, then returns plain
+text or delivers it when `--deliver` is explicit. Remote providers require
+HTTPS, plaintext HTTP is loopback-only, and generated C0/C1 terminal controls
+are rejected before stdout or delivery.
 `prdigest facts` never consults provider configuration.
+
+`Document.prompt` enforces a deterministic whole-document byte limit. It keeps
+each PR's identity, title, and description, removes or truncates patches first,
+and fails when non-patch metadata alone cannot fit.
 
 For both commands, the clock derives a half-open UTC window for one configured
 local date. GitHub pagination and optional details complete before the result is

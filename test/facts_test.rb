@@ -45,7 +45,11 @@ class FactsTest < Minitest::Test
                 merged_at: "2026-01-15T12:30:00Z",
                 additions: 21,
                 deletions: 8,
-                commits: 3
+                commits: 3,
+                description: "",
+                description_truncated: false,
+                patches: [],
+                patches_omitted: 0
               }]
             }
           ],
@@ -76,6 +80,8 @@ class FactsTest < Minitest::Test
     assert_nil pull_request.fetch(:additions)
     assert_nil pull_request.fetch(:deletions)
     assert_nil pull_request.fetch(:commits)
+    assert_equal "", pull_request.fetch(:description)
+    assert_equal [], pull_request.fetch(:patches)
     assert_nil document.fetch(:totals).fetch(:additions)
     assert_nil document.fetch(:totals).fetch(:deletions)
     assert_nil document.fetch(:totals).fetch(:commits)
