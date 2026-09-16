@@ -71,7 +71,35 @@ jobs:
           test "$built_version" = "$GEM_VERSION"
 
       - name: Configure short-lived RubyGems credentials
+        id: credentials
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a
+
+      - name: Diagnose rejected publisher identity
+        if: failure() && steps.credentials.outcome == 'failure'
+        shell: python
+        run: |
+          import base64, json, os, urllib.request, urllib.error
+          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=rubygems.org"
+          request = urllib.request.Request(url, headers={
+              "Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
+          })
+          with urllib.request.urlopen(request) as response:
+              token = json.load(response)["value"]
+          payload = token.split(".")[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+          safe = ["repository", "repository_owner_id", "environment", "job_workflow_ref", "workflow_ref", "ref", "aud"]
+          print("Publisher identity: " + json.dumps({key: claims.get(key) for key in safe}))
+          request = urllib.request.Request(
+              "https://rubygems.org/api/v1/oidc/trusted_publisher/exchange_token",
+              data=json.dumps({"jwt": token}).encode(),
+              headers={"Content-Type": "application/json", "Accept": "application/json"},
+          )
+          try:
+              with urllib.request.urlopen(request) as response:
+                  print("RubyGems exchange HTTP " + str(response.status))
+          except urllib.error.HTTPError as error:
+              print("RubyGems exchange HTTP " + str(error.code))
+              print("Response content type: " + str(error.headers.get("Content-Type")))
 
       - name: Publish exact gem
         run: gem push "pkg/prdigest-${GEM_VERSION}.gem"
