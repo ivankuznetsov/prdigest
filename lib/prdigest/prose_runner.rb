@@ -69,7 +69,7 @@ module Prdigest
         clock: @clock,
         github: @github || GitHub.new(token: github_token)
       ).call
-      prose = (@generator || build_generator(provider_key)).generate(facts)
+      prose = Document.generate(facts: facts, generator: @generator || build_generator(provider_key))
       rendered = @renderer.render(prose)
       GeneratedPayload.new(prose: prose, chunks: rendered.chunks)
     end

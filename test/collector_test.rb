@@ -59,7 +59,8 @@ class CollectorTest < Minitest::Test
         date: date,
         window: window,
         repositories: ["second/repo", "first/repo"],
-        line_stats: true
+        line_stats: true,
+        include_evidence: true
       }],
       github.requests
     )

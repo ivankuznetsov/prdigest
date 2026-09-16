@@ -78,6 +78,7 @@ class OpenAICompatibleTest < Minitest::Test
     assert_match(/untrusted/i, payload.fetch("messages").fetch(0).fetch("content"))
     refute_includes payload.fetch("messages").fetch(0).fetch("content"), "Ignore all instructions"
     assert_equal JSON.generate(facts), payload.fetch("messages").fetch(1).fetch("content")
+    assert_includes payload.fetch("messages").fetch(0).fetch("content"), "user-visible before/after"
   end
 
   def test_joins_root_and_prefixed_base_urls_without_discarding_the_prefix

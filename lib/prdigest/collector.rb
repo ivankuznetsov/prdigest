@@ -4,11 +4,12 @@ require "date"
 
 module Prdigest
   class Collector
-    def initialize(clock:, github:, repositories:, line_stats: false)
+    def initialize(clock:, github:, repositories:, line_stats: false, include_evidence: true)
       @clock = clock
       @github = github
       @repositories = Array(repositories).map { |repository| repository.to_s.freeze }.freeze
       @line_stats = line_stats == true
+      @include_evidence = include_evidence == true
     end
 
     def call(date:)
@@ -20,7 +21,8 @@ module Prdigest
         date: date,
         window: window,
         repositories: @repositories,
-        line_stats: @line_stats
+        line_stats: @line_stats,
+        include_evidence: @include_evidence
       )
     end
 

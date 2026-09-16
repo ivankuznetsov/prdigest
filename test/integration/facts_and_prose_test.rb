@@ -14,6 +14,9 @@ class FactsAndProseIntegrationTest < Minitest::Test
         "github" => { "repos" => ["example/project"] },
         "digest" => { "line_stats" => false }
       ))
+      stub_request(:get, "https://api.github.com/repos/example/project").to_return(
+        headers: { "Content-Type" => "application/json" }, body: JSON.generate(full_name: "example/project")
+      )
       stub_request(:get, %r{https://api.github.com/search/issues}).to_return(
         status: 200,
         headers: { "Content-Type" => "application/json" },
@@ -56,6 +59,9 @@ class FactsAndProseIntegrationTest < Minitest::Test
         },
         "digest" => { "line_stats" => false }
       ))
+      stub_request(:get, "https://api.github.com/repos/example/project").to_return(
+        headers: { "Content-Type" => "application/json" }, body: JSON.generate(full_name: "example/project")
+      )
       stub_request(:get, %r{https://api.github.com/search/issues}).to_return(
         status: 200,
         headers: { "Content-Type" => "application/json" },

@@ -10,6 +10,10 @@ require "time"
 PrdigestOfflineSmokeResponse = Struct.new(:code, :body)
 
 class Octokit::Client
+  def repository(name)
+    { full_name: name }
+  end
+
   def search_issues(query, _options = {})
     return { total_count: 0, incomplete_results: false, items: [] } if ENV["PRDIGEST_SMOKE_EMPTY"] == "1"
 
@@ -34,8 +38,12 @@ class Octokit::Client
     }
   end
 
+  def pull_request_files(_repository, _number, _options = {})
+    []
+  end
+
   def pull_request(_repository, _number)
-    { additions: 3, deletions: 1, commits: 1 }
+    { body: "Synthetic change description", changed_files: 0, additions: 3, deletions: 1, commits: 1 }
   end
 end
 
