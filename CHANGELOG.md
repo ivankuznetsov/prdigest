@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Retry GitHub rate limits past their reset: waits derived from
+  `X-RateLimit-Reset` add a 2-second buffer, no retry waits less than one
+  second, and rate-limited requests get 5 attempts (server and transport
+  failures keep 3). Previously a search-API limit retried exactly at the reset
+  second, saw `remaining=0` again, and exhausted its attempts within that second.
+
 ## 0.4.0 - 2026-09-16
 
 - Add bounded PR descriptions and relevant patches to facts, plus the reusable
