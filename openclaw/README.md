@@ -9,7 +9,7 @@ the prose itself from that document. It does not invoke PRDigest's provider or
 Telegram paths, or query GitHub directly.
 
 The Ruby gem and ClawHub skill have independent version histories. The prepared
-Ruby release is `0.4.0`; the
+Ruby release is `0.4.1`; the
 [`@ivankuznetsov/prdigest`](https://clawhub.ai/ivankuznetsov/skills/prdigest)
 skill is published separately under **Development**.
 
@@ -18,15 +18,15 @@ skill is published separately under **Development**.
 The Ruby CLI and ClawHub skill are separate installs. The manual commands are:
 
 ```sh
-gem install prdigest -v 0.4.0
+gem install prdigest -v 0.4.1
 openclaw skills install @ivankuznetsov/prdigest
 ```
 
 Or paste this prompt into an OpenClaw chat:
 
 ```text
-Install PRDigest 0.4.0 in the same user/runtime context as OpenClaw with
-`gem install prdigest -v 0.4.0`, then install the ClawHub skill with
+Install PRDigest 0.4.1 in the same user/runtime context as OpenClaw with
+`gem install prdigest -v 0.4.1`, then install the ClawHub skill with
 `openclaw skills install @ivankuznetsov/prdigest`. This message
 explicitly authorizes those two installs and only the PATH adjustment needed to
 make the installed `prdigest` executable visible to the OpenClaw runtime. Do
