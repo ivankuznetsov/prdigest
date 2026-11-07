@@ -8,6 +8,14 @@ module Prdigest
   class GitHub
     SEARCH_CAP = 1_000
     MAX_ATTEMPTS = 3
+    # GitHub's search API allows 30 requests per minute; a multi-repository
+    # day or a backfill can exhaust it. Rate limits name their own wait, so
+    # they get more attempts than server/transport failures.
+    MAX_RATE_LIMIT_ATTEMPTS = 5
+    # x-ratelimit-reset is a whole-second boundary. Retrying exactly at it can
+    # still see remaining=0 and a computed wait of zero, burning the remaining
+    # attempts within the same second.
+    RATE_LIMIT_RESET_BUFFER = 2
     MAX_DESCRIPTION_CHARS = 4_000
     MAX_PATCH_FILES = 20
     MAX_PATCH_CHARS = 6_000
@@ -207,10 +215,11 @@ module Prdigest
         attempts += 1
         yield
       rescue StandardError => e
-        unless transient?(e) && attempts < MAX_ATTEMPTS
+        limit = rate_limited?(e) ? MAX_RATE_LIMIT_ATTEMPTS : MAX_ATTEMPTS
+        unless transient?(e) && attempts < limit
           fail_fetch!(repository, date, error_kind(e))
         end
-        delay = retry_delay(e) || attempts
+        delay = [retry_delay(e) || attempts, 1].max
         fail_fetch!(repository, date, "retry delay exceeds 60 seconds") if delay > 60
         @sleeper.call(delay)
         retry
@@ -225,8 +234,16 @@ module Prdigest
     end
 
     def rate_limited?(error)
-      error.is_a?(Octokit::TooManyRequests) ||
-        (error.respond_to?(:response_status) && Integer(error.response_status, exception: false) == 429)
+      error.is_a?(Octokit::TooManyRequests) || response_status(error) == 429
+    end
+
+    # Octokit errors built without a response raise from #response_status.
+    def response_status(error)
+      return unless error.respond_to?(:response_status)
+
+      Integer(error.response_status, exception: false)
+    rescue StandardError
+      nil
     end
 
     def retry_delay(error)
@@ -235,7 +252,7 @@ module Prdigest
       return retry_after if retry_after
 
       reset_at = Integer(response_header(headers, "x-ratelimit-reset"), exception: false)
-      [reset_at - Integer(@now.call), 0].max if reset_at
+      [reset_at - Integer(@now.call), 0].max + RATE_LIMIT_RESET_BUFFER if reset_at
     rescue StandardError
       nil
     end

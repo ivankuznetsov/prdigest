@@ -289,7 +289,53 @@ class GithubTest < Minitest::Test
     )
 
     assert_equal 0, digest.total_prs
-    assert_equal [45], sleeps
+    assert_equal [47], sleeps
+  end
+
+  # Observed against api.github.com: after sleeping to the reset second the
+  # search limit still reported remaining=0 with a reset of "now", and the old
+  # zero-second retry exhausted every attempt in the same second.
+  def test_rate_limit_at_its_reset_boundary_still_waits_and_gets_more_attempts
+    sleeps = []
+    limited = {
+      status: 403,
+      headers: { "Content-Type" => "application/json", "X-RateLimit-Remaining" => "0",
+                 "X-RateLimit-Reset" => "1000", "X-RateLimit-Resource" => "search" },
+      body: JSON.generate(message: "API rate limit exceeded for user ID 1.")
+    }
+    request = stub_request(:get, %r{\Ahttps://api\.github\.com/search/issues\?}).to_return(
+      limited, limited, limited, limited,
+      {
+        status: 200,
+        headers: { "Content-Type" => "application/json" },
+        body: JSON.generate(total_count: 0, incomplete_results: false, items: [])
+      }
+    )
+
+    digest = github(sleeper: ->(seconds) { sleeps << seconds }, now: -> { 1_000 }).fetch(
+      date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+    )
+
+    assert_equal 0, digest.total_prs
+    assert_equal [2, 2, 2, 2], sleeps
+    assert_requested request, times: 5
+  end
+
+  def test_rate_limit_still_fails_after_its_bounded_attempts
+    stub_request(:get, %r{\Ahttps://api\.github\.com/search/issues\?}).to_return(
+      status: 429, headers: { "Content-Type" => "application/json", "Retry-After" => "0" },
+      body: JSON.generate(message: "synthetic rate limit")
+    )
+    sleeps = []
+
+    error = assert_raises(Prdigest::FetchError) do
+      github(sleeper: ->(seconds) { sleeps << seconds }).fetch(
+        date: Date.new(2026, 1, 15), window: tokyo_window, repositories: ["o/r"], line_stats: false
+      )
+    end
+
+    assert_includes error.message, "retries exhausted"
+    assert_equal [1, 1, 1, 1], sleeps
   end
 
   def test_inspection_redacts_token
