@@ -131,7 +131,7 @@ To build and install the current checkout as a gem without publishing it:
 
 ```sh
 gem build prdigest.gemspec
-gem install prdigest-0.4.0.gem
+gem install prdigest-0.4.1.gem
 prdigest version
 ```
 
@@ -336,7 +336,7 @@ chat IDs are normally positive; groups and channels normally use negative IDs.
 Install the released gem:
 
 ```sh
-gem install prdigest -v 0.4.0
+gem install prdigest -v 0.4.1
 prdigest version
 ```
 
@@ -416,8 +416,8 @@ current skill. To let OpenClaw install both, copy and paste this prompt into an
 OpenClaw chat:
 
 ```text
-Install PRDigest 0.4.0 in the same user/runtime context as OpenClaw with
-`gem install prdigest -v 0.4.0`, then install the ClawHub skill with
+Install PRDigest 0.4.1 in the same user/runtime context as OpenClaw with
+`gem install prdigest -v 0.4.1`, then install the ClawHub skill with
 `openclaw skills install @ivankuznetsov/prdigest`. This message
 explicitly authorizes those two installs and only the PATH adjustment needed to
 make the installed `prdigest` executable visible to the OpenClaw runtime. Do
@@ -429,7 +429,7 @@ discover the installed PRDigest skill, and report the installed paths and
 versions without exposing environment variables or tokens.
 ```
 
-For a manual install, run `gem install prdigest -v 0.4.0` and
+For a manual install, run `gem install prdigest -v 0.4.1` and
 `openclaw skills install @ivankuznetsov/prdigest`. The skill gives an agent
 facts-to-prose behavior only; use the
 [standalone Telegram bot](#standalone-telegram-bot) when PRDigest itself should
@@ -448,8 +448,8 @@ gem contains the example configuration and tested service units, so a source
 checkout is not required:
 
 ```sh
-sudo gem install prdigest -v 0.4.0 --no-document --bindir /usr/local/bin
-gem_root=$(ruby -e 'print Gem::Specification.find_by_name("prdigest", "0.4.0").full_gem_path')
+sudo gem install prdigest -v 0.4.1 --no-document --bindir /usr/local/bin
+gem_root=$(ruby -e 'print Gem::Specification.find_by_name("prdigest", "0.4.1").full_gem_path')
 
 sudo useradd --system --home /nonexistent --shell "$(command -v nologin)" prdigest
 sudo install -d -o root -g prdigest -m 0750 /etc/prdigest

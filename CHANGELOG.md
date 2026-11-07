@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-11-07
 
 - Retry GitHub rate limits past their reset: waits derived from
   `X-RateLimit-Reset` add a 2-second buffer, no retry waits less than one
